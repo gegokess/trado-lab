@@ -13,7 +13,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | V1 | Funding-Historie und Funding-Simulation im Labor | erledigt | fester Satz aus dem Kraken-Mittel 2026 (+2,85 % p.a.), Kontrolle bestanden |
 | V2 | Struktur-Definitionen aus Trado übernehmen, ETH- und SOL-Perps laden | erledigt | Features an 300 von 300 Zeitpunkten identisch zu Trado |
 | H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | abgelehnt | schon brutto negativ, auf BTC, ETH und SOL, gepoolt −0,07 R brutto |
-| H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | abgelehnt | Long positiv (+0,27 R, t = 1,9), Kriterium knapp verfehlt, Short klar negativ |
+| H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | abgelehnt | BTC Long N = 10 in Nautilus +0,30 R bei t = 1,5 (40 Trades), Short negativ |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
@@ -389,6 +389,28 @@ R netto Long N = 10 je Jahr: 2023 +0,63, 2024 +0,37, 2025 +0,01, 2026 bis April 
 Einordnung: Unter allen bisherigen Hypothesen ist das der erste Befund mit klar positivem Brutto-Ergebnis über mehrere Märkte. Das Problem ist die Stichprobe, nicht die Richtung. 117 Trades mit stark schiefer Verteilung reichen für t ≥ 2 nicht. Die Short-Seite ist dagegen eindeutig und kann ruhen.
 
 Offener Folgegedanke, eigener Eintrag nötig: dieselbe Long-Regel mit N = 10 als einzige Zelle auf weiteren Kraken-Perps, die nicht in H7 vorkamen. Das erweitert die Stichprobe unabhängig von der Auswahl, die hier getroffen wurde.
+
+**Nachtrag 24.10.2026, nur BTC:** Gregor hat festgelegt, dass ausschließlich BTC zählt, auch nicht als Gegenprobe. Der Folgegedanke mit weiteren Perps entfällt. Maßgeblich für H7 ist damit BTC allein.
+
+**Nautilus-Lauf BTC** (24.10.2026, In-Sample 2023-01 bis 2026-04, strategies/donchian.py, `python -m lab.run donchian side=long N=10`)
+
+| Seite | N | Quelle | Trades | R brutto | R netto | t-Wert | R ohne Top 3 | Funding R |
+|---|---|---|---|---|---|---|---|---|
+| Long | 10 | numba | 40 | +0,318 | +0,298 | +1,5 | +0,022 | −0,011 |
+| Long | 10 | Nautilus | 40 | +0,318 | +0,298 | +1,5 | +0,022 | −0,011 |
+| Long | 20 | numba | 22 | +0,405 | +0,384 | +0,9 | −0,190 | −0,015 |
+| Long | 20 | Nautilus | 21 | +0,413 | +0,391 | +0,9 | −0,213 | −0,015 |
+| Long | 30 | numba | 17 | +0,382 | +0,358 | +0,8 | −0,390 | −0,019 |
+| Long | 30 | Nautilus | 16 | +0,410 | +0,385 | +0,8 | −0,414 | −0,019 |
+| Short | 10 | Nautilus | 33 | −0,296 | −0,297 | −2,9 | −0,427 | +0,007 |
+| Short | 20 | Nautilus | 17 | −0,245 | −0,240 | −1,3 | −0,515 | +0,011 |
+| Short | 30 | Nautilus | 12 | −0,140 | −0,133 | −0,7 | −0,412 | +0,011 |
+
+- Deckung Trade für Trade: alle Nautilus-Trades haben im Scan denselben Einstiegszeitpunkt und denselben Ausstieg, die Abweichung je Trade liegt unter 0,001 R. Der Einstiegspreis weicht in einigen Fällen um Bruchteile eines Dollars ab
+- Der einzige Unterschied: Bei N = 20 und N = 30 ist am Ende des In-Sample-Zeitraums eine Position offen. Der Scan bewertet sie zum letzten Schluss, Nautilus zählt sie nicht. Short ist in beiden Quellen identisch
+- Für Tagesregeln mit Market-Einstieg und Stop-Ausstieg ist der Scan damit exakt
+
+**Entscheidung H7 bleibt:** abgelehnt. Auf BTC allein erreicht die beste Zelle (Long N = 10) netto +0,30 R bei t = 1,5 mit 40 Trades. Ohne die drei besten Trades bleiben +0,02 R, die drei besten tragen rund 93 % des Gewinns. Kein OOS-Test: Bei rund einem Trade pro Monat kämen im OOS-Zeitraum etwa sechs Trades zusammen, das entscheidet nichts. Die Richtung ist positiv, die Stichprobe auf BTC ab 2023 reicht für einen Nachweis nicht.
 
 ---
 
