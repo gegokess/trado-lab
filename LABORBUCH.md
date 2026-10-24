@@ -8,6 +8,8 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H1 | Lange 1h-Wicks werden nach 20 % Füllung bis 80 % weiter gefüllt | abgelehnt | kein Edge, brutto ±0, netto −0,1 bis −0,2 R |
 | H2 | Sweep eines unberührten Swing-Levels kehrt um, Ziel über der Wickbasis | abgelehnt | kein Edge, brutto ±0 bis +0,05, netto −0,006 bis −0,11 R |
 | H3 | Wie H2, aber Einstieg per Limit auf einem Rücklauf unter die Wickbasis | abgelehnt | besser als H2, aber in Nautilus netto −0,008 bis −0,078 R |
+| H4 | Wie H3, aber der Einstieg muss über dem gesweepten Level liegen | abgelehnt | erster messbarer Effekt (+0,02 R, obere Seite +0,05 R), aber nicht signifikant |
+| H5 | Wie H3, aber Swing-Level aus 4h-Kerzen statt 1h | abgelehnt | klar schlechter als H3, −0,10 R im Mittel |
 
 ---
 
@@ -131,5 +133,78 @@ Der Versatz von +1 Minute entspricht dem Verhalten bei H1 (ruhende Stop-Order) u
 
 Damit ist die Idee Sweep als Umkehrsignal in zwei Einstiegsvarianten geprüft und beide Male netto negativ. Weitere Varianten derselben Geometrie sind nicht aussichtsreich, ohne eine neue Zutat. Offene Folgegedanken für eigene Einträge:
 
-- Einstieg nur zulassen, wenn der Rücklauf über dem gesweepten Level S bleibt, also die Rückeroberung erhalten bleibt. In H3 darf der Einstieg unter S liegen, wenn S hoch in der Wick sitzt
-- Sweep auf einem höheren Zeitrahmen (Swing-Level aus 4h statt 1h), damit mehr ruhende Liquidität am Level liegt
+- Einstieg nur zulassen, wenn der Rücklauf über dem gesweepten Level S bleibt: als H4 geprüft, erster messbarer Effekt, aber nicht signifikant
+- Swing-Level aus 4h statt 1h: als H5 geprüft, klar schlechter
+
+---
+
+## H4: Rücklauf-Einstieg mit erhaltener Rückeroberung
+
+**Idee (Gregor, 24.10.2026):** In H3 darf die Einstiegs-Limit-Order unter dem gesweepten Level S liegen, wenn S hoch in der Wick sitzt. Dann ist die Rückeroberung des Levels beim Einstieg schon wieder verloren und das Setup widerspricht seiner eigenen Begründung. H4 verlangt, dass der Einstieg über S bleibt.
+
+**Regeln** (strategies/sweep_reclaim.py, scan/sweep_reclaim_scan.py, Schalter reclaim = True, lvl_tf = 1)
+
+- alles wie H3, zusätzlich: Setup nur gültig, wenn S < T − pb_w × W, also das Einstiegslevel strikt über dem gesweepten Level liegt
+- die Bedingung ersetzt eine Prüfung über den Zeitverlauf: da die Limit-Order über S liegt, füllt sie zwangsläufig, bevor der Kurs S wieder unterschreitet
+
+**Vorab festgelegtes Raster:** identisch zu H3, damit die Zahlen direkt vergleichbar sind (16 Varianten, Seite untere/obere, k_atr 1,0/1,5, pb_w 0,2/0,4, tp_w 0,5/1,0, fest sl_w = 0,2, sw = 3, Zeitstopp 360 min).
+
+**Korrektheitsprüfung:** mit reclaim = False und lvl_tf = 1 reproduzieren Scan und Strategie H3 Trade für Trade, über alle 16 Varianten im Scan und in drei Nautilus-Läufen. Die verallgemeinerte Level-Mechanik ist damit abgesichert (`python -m scan.sweep_reclaim_scan --pruefe`).
+
+**Wirkung des Filters, Scan über alle 16 Varianten gegen H3**
+
+| | Mittel netto gegen H3 | besser in | Trades gegenüber H3 |
+|---|---|---|---|
+| alle 16 Varianten | +0,019 R | 10 von 16 | 73 % |
+| nur untere Seite | −0,010 R | 3 von 8 | |
+| nur obere Seite | +0,047 R | 7 von 8 | |
+
+Der Filter wirkt nur auf der oberen Seite, also beim Sweep eines Swing-Hochs. Dort verbessert er 7 von 8 Varianten, auf der unteren Seite ist er neutral bis schädlich. Er entfernt insgesamt 27 % der Trades, und die entfernten sind im Schnitt Verlierer.
+
+**Abgleich Nautilus gegen numba-Scan** (24.10.2026, In-Sample 2023-01 bis 2026-04)
+
+| Seite | k | pb_w | tp_w | Quelle | Trades | TP-Quote | R brutto | R netto | t-Wert | R ohne Top 3 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| obere | 1,5 | 0,2 | 1,0 | numba | 117 | 35,9 % | +0,10 | +0,058 | +0,7 | +0,03 |
+| obere | 1,5 | 0,2 | 1,0 | Nautilus | 104 | 31,7 % | +0,05 | +0,008 | +0,1 | −0,03 |
+| obere | 1,5 | 0,4 | 0,5 | numba | 43 | 41,9 % | +0,13 | +0,070 | +0,5 | −0,01 |
+| obere | 1,5 | 0,4 | 0,5 | Nautilus | 47 | 42,6 % | +0,14 | +0,085 | +0,6 | +0,02 |
+| untere | 1,0 | 0,2 | 0,5 | numba | 355 | 54,6 % | +0,02 | −0,021 | −0,5 | −0,03 |
+| untere | 1,0 | 0,2 | 0,5 | Nautilus | 325 | 54,5 % | +0,02 | −0,021 | −0,5 | −0,03 |
+
+Deckung 71 bis 91 % bei Versatz +1 Minute, 89 bis 91 % im Fenster 0 bis 10 Minuten, wie bei H3. Der Scan rechnet die stärkste Variante deutlich zu gut: +0,058 R im Scan gegen +0,008 R in Nautilus.
+
+**Entscheidung H4:** abgelehnt als handelbare Regel, aber der Filter selbst ist der erste Befund im Labor, der messbar in die richtige Richtung wirkt. In Nautilus bleibt nur eine Variante netto positiv (obere Seite, k = 1,5, pb_w = 0,4, tp_w = 0,5: +0,085 R) und die hat 47 Trades in 40 Monaten bei t = 0,6. Das ist die beste von 16 Zellen und damit kein Nachweis. Brutto ist mit +0,14 R der höchste Wert im Labor bisher.
+
+**Kein OOS-Test, bewusst.** Der OOS-Zeitraum ab 2026-05-01 umfasst knapp sechs Monate. Bei 47 Trades in 40 Monaten wären das etwa 7 Trades, bei der 117er-Variante etwa 15. Damit ist keine Entscheidung möglich, der Zeitraum bleibt für eine Hypothese mit genug Trades reserviert.
+
+Festhalten für künftige Hypothesen: die Bedingung Einstieg über dem gesweepten Level gehört auf der oberen Seite in jede Sweep-Regel, sie kostet 27 % der Trades und bringt im Mittel +0,05 R. Offener Folgegedanke: dieselbe Geometrie mit deutlich mehr Trades, etwa Wick und Level auf 15m statt 1h, damit eine Variante überhaupt in den Bereich statistischer Aussagekraft kommt.
+
+---
+
+## H5: Rücklauf-Einstieg mit Swing-Leveln aus 4h
+
+**Idee (Gregor, 24.10.2026):** Swing-Level aus 1h-Kerzen sind häufig und flach. An einem Level aus einem höheren Zeitrahmen liegt mehr ruhende Liquidität, der Sweep sollte dort aussagekräftiger sein.
+
+**Regeln** (strategies/sweep_reclaim.py, scan/sweep_reclaim_scan.py, Schalter reclaim = False, lvl_tf = 4)
+
+- alles wie H3, aber Swing-Tiefs werden auf 4h-Kerzen bestimmt: eine 4h-Kerze, deren Tief strikt unter den Tiefs der sw 4h-Kerzen davor und danach liegt, bestätigt sw × 4 Stunden später
+- unberührt wird gegen abgeschlossene 4h-Kerzen geprüft
+- Wick, ATR14 und alle Ein- und Ausstiegslevel bleiben auf 1h beziehungsweise 1m, nur die Herkunft von S ändert sich
+
+**Vorab festgelegtes Raster:** identisch zu H3 und H4 (16 Varianten).
+
+**Abgleich Nautilus gegen numba-Scan** (24.10.2026, In-Sample 2023-01 bis 2026-04)
+
+| Seite | k | pb_w | tp_w | Quelle | Trades | R brutto | R netto | t-Wert |
+|---|---|---|---|---|---|---|---|---|
+| untere | 1,5 | 0,4 | 0,5 | numba | 53 | +0,04 | +0,001 | +0,0 |
+| untere | 1,5 | 0,4 | 0,5 | Nautilus | 53 | −0,04 | −0,081 | −0,6 |
+| obere | 1,0 | 0,2 | 0,5 | numba | 197 | +0,03 | −0,022 | −0,4 |
+| obere | 1,0 | 0,2 | 0,5 | Nautilus | 170 | −0,02 | −0,064 | −1,0 |
+
+**Wirkung gegen H3, Scan über alle 16 Varianten:** Mittel −0,097 R, besser in nur 2 von 16 Zellen, 52 % der Trades von H3. Auf der unteren Seite ist keine einzige Variante besser als H3.
+
+**Entscheidung H5:** abgelehnt. Die Annahme, an 4h-Leveln liege mehr ruhende Liquidität und der Sweep sei dort aussagekräftiger, bestätigt sich nicht, das Gegenteil tritt ein. Im Scan ist keine Variante netto über +0,001 R, in Nautilus sind beide nachgerechneten Varianten klar negativ, und die schlechteste Zelle (obere Seite, k = 1,5, pb_w = 0,4) liegt mit −0,37 bis −0,42 R bei t = −2,8 deutlich im Minus. Kein OOS-Test.
+
+Mögliche Erklärung, nicht geprüft: ein 4h-Swing-Tief wird seltener unberührt gesweept, und wenn doch, ist der Durchstich Teil einer größeren Bewegung statt eines Stop-Hunts. Die Umkehrannahme passt dort nicht.
