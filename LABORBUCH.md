@@ -14,6 +14,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | V2 | Struktur-Definitionen aus Trado übernehmen, ETH- und SOL-Perps laden | erledigt | Features an 300 von 300 Zeitpunkten identisch zu Trado |
 | H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | abgelehnt | schon brutto negativ, auf BTC, ETH und SOL, gepoolt −0,07 R brutto |
 | H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | abgelehnt | BTC Long N = 10 in Nautilus +0,30 R bei t = 1,5 (40 Trades), Short negativ |
+| H7c | H7 auf längerer BTC-Historie (Yahoo BTC-USD, 2015 bis 2022) | Kriterium erfüllt, Signal ohne Mehrwert | Long N = 10 +0,91 R bei t = 3,1, Zufallseinstiege mit gleichem Stop sind genauso gut |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
@@ -454,3 +455,70 @@ Festhalten für Trado und künftige Hypothesen:
 
 - Der Abend-Effekt ist brutto real und stabil. Als Zeitfilter in `STRATEGIE-REGELN` Punkt 10 brauchbar, etwa keine neuen Shorts zwischen 21:00 und 23:00 UTC und Long-Setups mit Einstieg vor 21:00 bevorzugen
 - Er reicht nicht, um zwei Taker-Gebühren zu tragen. Offener Folgegedanke als eigene Hypothese: Einstieg und Ausstieg per Limit (Maker) rund um 21:00 und 23:00, mit dem Risiko nicht gefüllter Orders. Bei zweimal Maker läge die Kostenschwelle bei 0,02 % statt 0,06 %
+
+---
+
+## H7c: Donchian-Ausbruch auf längerer BTC-Historie
+
+**Idee (Gregor, 24.10.2026):** H7 zeigt auf BTC ab 2023 eine positive Long-Seite, die Stichprobe von 40 Trades reicht aber nicht für einen Nachweis. Kraken liefert für BTC keine Futures-Daten vor 2023. Als zusätzlicher Backtest dient deshalb eine andere BTC-Kursreihe mit längerer Historie. Es bleibt bei BTC, kein anderer Coin.
+
+**Daten**
+
+- Yahoo Finance BTC-USD, Tageskerzen UTC, Historie ab September 2014 (`python scripts/fetch_yahoo_btc.py`)
+- Spot-Index statt Perpetual. Für eine Tagesregel ohne Intraday-Logik ist das gleichwertig, Funding gibt es im Spot nicht, wird aber wie in H7 als fester Satz abgezogen (für Longs vorsichtig)
+- Testzeitraum 2015-01-01 bis 2022-12-31. Er überschneidet sich nicht mit dem Zeitraum von H7 und enthält zwei Bärenmärkte (2018, 2022)
+- Qualitätsprüfung vorab: Yahoo-Tageskerzen gegen die aus Kraken-1m gebildeten Tageskerzen 2023 bis April 2026 vergleichen
+
+**Regeln:** unverändert aus H7 (strategies/donchian.py). Auf Tageskerzen ist die Regel exakt rechenbar, weil alle Entscheidungen zum Tageswechsel fallen und der Stop innerhalb eines Tages fest liegt: Stop getroffen, wenn das Tagestief ihn erreicht, Fill zum Stop oder bei einer Eröffnung darunter zum Open. Kontrolle: die Tagesrechnung muss auf den Kraken-Daten 2023 bis April 2026 dieselben Trades liefern wie der 1m-Scan von H7.
+
+**Vorab festgelegt**
+
+- Haupttest genau eine Zelle: Long N = 10, die beste Zelle aus H7. Weil sie dort ausgewählt wurde, zählt nur dieser neue Zeitraum als Bestätigung
+- die übrigen fünf Zellen aus H7 nur beschreibend
+- Erfolgskriterium: netto über null, t ≥ 2, ohne die drei besten Trades positiv. Zusätzlich beschreibend die Jahre einzeln und der Gesamtzeitraum 2015 bis April 2026
+- Gebühren wie Kraken: Einstieg und Stop je Taker 0,03 %
+
+**Folgen:** Besteht Long N = 10 auf 2015 bis 2022, ist H7 auf BTC als Kandidat für den OOS-Test ab Mai 2026 bestätigt (der OOS-Zeitraum ist dann aber erst nach einigen Monaten mehr Daten aussagekräftig). Fällt sie durch, ist H7 endgültig verworfen.
+
+**Ergebnis** (24.10.2026, `python -m scan.donchian_daily_scan`)
+
+Kontrollen:
+
+- Tagesrechnung gegen 1m-Scan auf Kraken 2023 bis April 2026: in allen sechs Zellen dieselben Trades, Abweichung je Trade höchstens 0,001 R. Die Tagesrechnung ist für diese Regel exakt
+- Yahoo gegen Kraken an 1.216 gemeinsamen Tagen: mittlere Abweichung 0,05 % bei Open und Close, 0,15 % bei Hoch und Tief. Auf Trade-Ebene reagiert der Ausbruch empfindlich darauf: Long N = 10 hat auf Yahoo 45 statt 40 Trades, 38 davon gemeinsam, netto +0,18 statt +0,30 R. Die Richtung ist in allen Zellen gleich
+
+Haupttest und Beschreibung, Yahoo 2015 bis 2022:
+
+| Seite | N | Trades | Treffer | Tage im Trade | R netto | t-Wert | R ohne Top 3 |
+|---|---|---|---|---|---|---|---|
+| Long | 10 | 97 | 45,4 % | 10,6 | +0,907 | +3,1 | +0,515 |
+| Long | 20 | 45 | 60,0 % | 25,1 | +1,744 | +2,7 | +0,763 |
+| Long | 30 | 31 | 54,8 % | 36,9 | +2,153 | +2,5 | +0,807 |
+| Short | 10 | 78 | 33,3 % | 9,3 | −0,013 | −0,1 | −0,127 |
+| Short | 20 | 38 | 50,0 % | 18,6 | +0,206 | +1,6 | +0,055 |
+| Short | 30 | 26 | 42,3 % | 22,9 | +0,050 | +0,3 | −0,141 |
+
+R netto Long N = 10 je Jahr: 2015 +1,52, 2016 +1,58, 2017 +2,09, 2018 −0,09, 2019 +0,55, 2020 +1,56, 2021 +0,02, 2022 −0,36. Über 2015 bis April 2026 zusammen: 142 Trades, +0,74 R, t = 3,3.
+
+Das vorab festgelegte Kriterium ist für Long N = 10 erfüllt: netto +0,91 R, t = 3,1, ohne die drei besten Trades +0,52 R. In den beiden Bärenjahren 2018 und 2022 verliert die Regel nur wenig.
+
+**Kontrollvergleich, nachträglich und nur beschreibend:** Im Testzeitraum stieg BTC rund um das Fünfzigfache. Um zu prüfen, ob der Ausbruch selbst etwas beiträgt, wurde dieselbe Ausstiegsregel (Anfangs-Stop am 5-Tage-Tief, täglich nachgezogen) mit anderen Einstiegen gerechnet:
+
+| Einstieg | Zeitraum | Trades | R netto je Trade |
+|---|---|---|---|
+| Donchian N = 10 | Yahoo 2015 bis 2022 | 97 | +0,92 |
+| jeden Tag, sobald flach | Yahoo 2015 bis 2022 | 517 | +1,02 |
+| zufällig (8 % je Tag, 300 Läufe) | Yahoo 2015 bis 2022 | im Mittel 149 | im Mittel +1,34 |
+| Donchian N = 10 | Kraken 2023 bis April 2026 | 40 | +0,31 |
+| jeden Tag, sobald flach | Kraken 2023 bis April 2026 | 220 | +0,47 |
+| zufällig (8 % je Tag, 300 Läufe) | Kraken 2023 bis April 2026 | im Mittel 64 | im Mittel +0,36 |
+
+In 83 % der Zufallsläufe 2015 bis 2022 und in 47 % der Läufe 2023 bis 2026 liegt das Ergebnis je Trade mindestens so hoch wie mit dem Ausbruchssignal.
+
+**Entscheidung H7c:** Das Kriterium ist formal erfüllt, als Timing-Vorteil ist der Ausbruch aber nicht bestätigt. Das positive Ergebnis kommt aus der Kombination von BTCs langfristigem Anstieg mit einem nachgezogenen Stop, nicht aus dem Einstiegssignal. Zufällige Einstiege mit demselben Stop schneiden genauso gut oder besser ab. Kein OOS-Test, weil es kein Signal gibt, das sich zu bestätigen lohnt.
+
+Folgen für Trado:
+
+- Kein eigener Ausführungspfad für Donchian-Ausbrüche, der Einstieg bringt nichts
+- Was bleibt, ist eine Aussage über die Marktrichtung: Long BTC mit Trailing-Stop am 5-Tage-Tief hat 2015 bis 2026 positiv abgeschnitten, Short in keiner Form. Das ist eine Wette darauf, dass BTC weiter steigt, keine Handelsregel mit Vorteil gegenüber dem Halten
+- Für künftige Hypothesen gehört dieser Kontrollvergleich mit Zufallseinstiegen fest ins Protokoll, sobald eine Regel nur eine Richtung handelt
