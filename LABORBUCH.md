@@ -13,7 +13,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | V1 | Funding-Historie und Funding-Simulation im Labor | erledigt | fester Satz aus dem Kraken-Mittel 2026 (+2,85 % p.a.), Kontrolle bestanden |
 | V2 | Struktur-Definitionen aus Trado übernehmen, ETH- und SOL-Perps laden | erledigt | Features an 300 von 300 Zeitpunkten identisch zu Trado |
 | H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | abgelehnt | schon brutto negativ, auf BTC, ETH und SOL, gepoolt −0,07 R brutto |
-| H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | offen | |
+| H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | abgelehnt | Long positiv (+0,27 R, t = 1,9), Kriterium knapp verfehlt, Short klar negativ |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
@@ -355,6 +355,40 @@ Besonders deutlich: Je tiefer der Einstieg im Retracement (0,882 statt 0,618), d
 **Erfolgskriterium:** gepoolt netto über null mit t ≥ 2, ohne die drei besten Trades je Markt positiv, auf mindestens zwei der drei Märkte einzeln positiv. Bei Trendfolge ist eine Trefferquote um 35 bis 45 % normal und kein Ablehnungsgrund.
 
 **Folgen für Trado:** Trado kann diesen Setup-Typ heute nicht abbilden (kein Stop-Entry, kein Nachziehen, Verfall nach einer Stunde, der Prompt lehnt Ausbrüche ab). Besteht H7, braucht der Bot einen zweiten, rein regelbasierten Ausführungspfad ohne LLM-Vorschlag.
+
+**Ergebnis Scan** (24.10.2026, In-Sample 2023-01 bis 2026-04, `python -m scan.donchian_scan`)
+
+Gepoolt über BTC, ETH und SOL:
+
+| Seite | N | Trades | Treffer | Tage im Trade | R brutto | R netto | t-Wert | R ohne Top 3 | Funding R |
+|---|---|---|---|---|---|---|---|---|---|
+| Long | 10 | 117 | 41,9 % | 9,5 | +0,281 | +0,266 | +1,9 | +0,083 | −0,008 |
+| Long | 20 | 64 | 43,8 % | 19,7 | +0,448 | +0,431 | +1,3 | −0,022 | −0,012 |
+| Long | 30 | 45 | 40,0 % | 26,9 | +0,724 | +0,706 | +1,2 | −0,064 | −0,015 |
+| Short | 10 | 101 | 21,8 % | 8,0 | −0,152 | −0,152 | −2,3 | −0,237 | +0,006 |
+| Short | 20 | 58 | 25,9 % | 14,8 | −0,172 | −0,169 | −1,9 | −0,267 | +0,008 |
+| Short | 30 | 39 | 33,3 % | 19,8 | −0,181 | −0,176 | −1,8 | −0,289 | +0,008 |
+
+Long je Markt, R netto (R ohne Top 3 des Markts):
+
+| N | BTC | ETH | SOL |
+|---|---|---|---|
+| 10 | +0,298 (+0,022) | +0,171 (−0,216) | +0,334 (−0,040) |
+| 20 | +0,384 (−0,190) | −0,062 (−0,375) | +1,026 (−0,110) |
+| 30 | +0,358 (−0,390) | +0,014 (−0,331) | +1,820 (−0,277) |
+
+R netto Long N = 10 je Jahr: 2023 +0,63, 2024 +0,37, 2025 +0,01, 2026 bis April −0,30.
+
+- Gebühren spielen hier keine Rolle (rund 0,015 R je Trade), weil der Stop im Median 7,7 % entfernt liegt. Funding kostet die Longs 0,008 bis 0,015 R
+- Typisches Trendfolge-Profil: Trefferquote um 40 %, das Ergebnis hängt an wenigen großen Gewinnern (BTC Long N = 10: bester Trade +4,6 R im Januar 2023, die drei besten zusammen tragen fast den ganzen Gewinn)
+- Long ist auf allen drei Märkten positiv, Short auf allen drei negativ. Im Testzeitraum stieg BTC um rund 360 %. Ein Teil des Long-Ergebnisses ist damit schlicht Marktrichtung, nicht Ausbruchslogik. BTC Long N = 10 war 33 % der Zeit investiert
+- Die Jahreszahlen fallen von 2023 nach 2026 deutlich ab, im Einklang mit dem flacheren Markt seit 2025
+
+**Entscheidung H7:** abgelehnt nach dem vorab festgelegten Kriterium. Die beste Zelle (Long N = 10) erreicht gepoolt t = 1,9 statt 2 und ist ohne die drei besten Trades auf ETH und SOL negativ. Erfüllt ist nur die Bedingung, auf mindestens zwei Märkten einzeln positiv zu sein. Kein Nautilus-Lauf, weil Market-Einstieg und Stop-Ausstieg im Scan verlässlich sind (vgl. H2) und die Entscheidung nicht an der Ausführungsgenauigkeit hängt. Kein OOS-Test. Varianten getestet: 6 gepoolte Zellen auf drei Märkten.
+
+Einordnung: Unter allen bisherigen Hypothesen ist das der erste Befund mit klar positivem Brutto-Ergebnis über mehrere Märkte. Das Problem ist die Stichprobe, nicht die Richtung. 117 Trades mit stark schiefer Verteilung reichen für t ≥ 2 nicht. Die Short-Seite ist dagegen eindeutig und kann ruhen.
+
+Offener Folgegedanke, eigener Eintrag nötig: dieselbe Long-Regel mit N = 10 als einzige Zelle auf weiteren Kraken-Perps, die nicht in H7 vorkamen. Das erweitert die Stichprobe unabhängig von der Auswahl, die hier getroffen wurde.
 
 ---
 
