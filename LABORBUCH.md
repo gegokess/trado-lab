@@ -16,6 +16,8 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | abgelehnt | BTC Long N = 10 in Nautilus +0,30 R bei t = 1,5 (40 Trades), Short negativ |
 | H7c | H7 auf längerer BTC-Historie (Yahoo BTC-USD, 2015 bis 2022) | Kriterium erfüllt, Signal ohne Mehrwert | Long N = 10 +0,91 R bei t = 3,1, Zufallseinstiege mit gleichem Stop sind genauso gut |
 | H9 | Intraday-Momentum: Rendite seit US-Öffnung bestimmt die Richtung der letzten halben Stunde | abgelehnt | Effekt 2023 bis 2026 verschwunden, brutto +1,9 bps, netto −4,1 bps, nicht besser als Zufall |
+| H10 | Die kleinen Brutto-Effekte aus H8 und H9 mit Limit-Orders (Maker) statt Market handeln | abgelehnt | negative Auswahl der Fills frisst die Ersparnis, H10a +1,6 bps netto bei t = 0,8, H10b negativ |
+| H11 | Nach einer sehr starken Bewegung kehrt BTC um (Ereignisstudie, dann Regel) | abgelehnt | 0 von 54 Zellen, nach Fällen nur der allgemeine Aufwärtstrend |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
@@ -577,3 +579,81 @@ Zeiten fest in UTC − 5 (Haupttest):
 - In New Yorker Ortszeit mit Sommerzeit noch schwächer: alle drei Signale brutto knapp negativ
 
 **Entscheidung H9:** abgelehnt. Der in der Studie bis 2020 belegte Effekt ist auf Kraken 2023 bis 2026 nicht mehr vorhanden. Das Momentum-Signal A hat brutto keinerlei Vorhersagekraft (+0,1 bps), nur die Umkehr der vorletzten halben Stunde (B) zeigt brutto knapp 2 bps, ein Drittel der Kosten. Das passt zu der Studie über kurzfristige Umkehr (rund 1,3 bps brutto, unter den Kosten). Kein Nautilus-Lauf, kein OOS-Test. Varianten: 3 Signale in 2 Zeitzonen, nur C zählte.
+
+---
+
+## H10: Limit-Ausführung statt Market
+
+**Idee (Gregor, 24.10.2026):** H8 (Long 21 bis 23 UTC) und Signal B aus H9 (Umkehr der vorletzten halben Stunde) haben brutto einen kleinen Effekt von +6,8 und +1,9 bps, scheitern aber an zweimal Taker (6 bps). Mit zweimal Maker kostet die Runde 2 bps. Geprüft wird, ob der Effekt die Limit-Ausführung übersteht. Risiken: Orders werden nicht gefüllt, und gefüllt werden bevorzugt die Fälle, in denen der Kurs gegen die Position läuft.
+
+**Füllmodell:** Eine Limit-Order füllt nur, wenn eine spätere 1m-Kerze den Preis echt durchhandelt (Kauf: Tief < Limit, Verkauf: Hoch > Limit). Berührung allein reicht nicht, weil die Warteschlange am Preis unbekannt ist. Beschreibend zusätzlich mit Füllung bei Berührung als optimistische Obergrenze.
+
+**Regeln H10a** (scan/maker_scan.py), Grundlage H8
+
+- 21:00 UTC: Post-Only-Limit Kauf zum Open der Minute 21:00, gültig bis 22:00, sonst kein Trade
+- Not-SL per Stop-Market bei Einstieg − 1,5 × ATR14 (1h) wie in H8, gilt ab der Füllminute
+- 23:00 UTC: Post-Only-Limit Verkauf zum Open der Minute 23:00, gültig bis 23:30, danach Market zum Open von 23:30 (Taker)
+- R = 1,5 × ATR wie in H8
+
+**Regeln H10b** (scan/maker_scan.py), Grundlage H9 Signal B
+
+- Richtung wie B: Long wenn die Rendite 21:00 bis 21:30 UTC negativ ist, sonst Short
+- 21:30 UTC: Post-Only-Limit zum Open der Minute 21:30, gültig bis 21:45, sonst kein Trade
+- 22:00 UTC: Post-Only-Limit zum Open der Minute 22:00 zum Schließen, gültig bis 22:15, danach Market (Taker)
+- kein Stop, R = ATR14 (1h) wie in H9
+
+**Vorab festgelegt** (In-Sample 2023-01-01 bis 2026-04-30, je eine Regel, kein Raster)
+
+- Erfolgskriterium je Regel: netto über null mit t ≥ 2, ohne die drei besten Trades positiv, in jedem der Jahre 2023, 2024 und 2025 netto positiv
+- H10b zusätzlich: über dem 95-%-Quantil von 1.000 Läufen mit Zufallsrichtung und identischer Ausführung
+- beschreibend: Füllquote, Anteil der Ausstiege per Market, Brutto der gefüllten gegen die nicht gefüllten Tage (gemessen mit der Market-Variante, zeigt die negative Auswahl der Fills)
+
+---
+
+## H11: Umkehr nach sehr starken Bewegungen
+
+**Idee (Gregor, 24.10.2026):** Nach einem sehr starken Fall oder Anstieg kehrt BTC um. Gehandelt wird gegen die Bewegung. Literatur: kurzfristige Überreaktion in Krypto ist dokumentiert, nach Kosten aber schwach (vgl. H9 Recherche). Weil die Frage offen formuliert ist, erst eine Ereignisstudie mit vorab festgelegtem Raster, dann nur bei einem eindeutigen Befund eine Handelsregel.
+
+**Ereignisdefinition** (scan/umkehr_scan.py)
+
+- zu jeder vollen Stunde t die Bewegung r_L über die letzten L Stunden (Open der Minute t gegen Open der Minute t − L)
+- Maßstab σ_L = σ_1h × √L, σ_1h = Standardabweichung der 1h-Renditen der letzten 720 Stunden (30 Tage), nur Vergangenheit
+- Ereignis, wenn |r_L| ≥ k × σ_L
+- Entballung: nach einem Ereignis in einer Zelle zählt das nächste derselben Zelle frühestens 24 h später, damit sich die Folgerenditen nicht überlappen
+- Folgerendite über H Stunden ab dem Open der Minute t, mit Vorzeichen gegen die Bewegung (positiv heißt Umkehr)
+
+**Raster:** L 1 / 4 / 24 h, k 2 / 3 / 4, H 1 / 4 / 24 h, getrennt nach Fall und Anstieg. 54 Zellen.
+
+**Vorab festgelegt**
+
+- Wegen 54 Zellen zählt eine Zelle nur bei t ≥ 3,3 brutto (Bonferroni für 5 %) und netto positiv bei zweimal Taker (6 bps)
+- erfüllt keine Zelle das Kriterium, ist H11 abgelehnt und es wird keine Regel gebaut
+- erfüllt eine Zelle es, wird genau diese als Regel mit Market-Einstieg und Zeitausstieg in Nautilus gerechnet, mit Kontrolle gegen Zufallseinstiege derselben Richtung, danach OOS
+
+**Ergebnis H10** (24.10.2026, In-Sample 2023-01 bis 2026-04, `python -m scan.maker_scan`)
+
+| Regel | Füllung | Trades | Füllquote | Limit-Ausstieg | bps brutto | bps netto | t (bps) | R netto | t (R) |
+|---|---|---|---|---|---|---|---|---|---|
+| H10a | durchgehandelt (Haupttest) | 1.174 | 96,5 % | 82,9 % | +4,0 | +1,6 | +0,8 | −0,008 | −0,4 |
+| H10a | Berührung (Obergrenze) | 1.216 | 100 % | 88,7 % | +6,7 | +4,4 | +2,2 | +0,023 | +1,2 |
+| H10b | durchgehandelt (Haupttest) | 1.107 | 91,0 % | 92,1 % | −1,6 | −3,8 | −3,0 | −0,084 | −4,8 |
+| H10b | Berührung (Obergrenze) | 1.216 | 100 % | 100 % | +1,9 | −0,1 | −0,1 | −0,019 | −1,3 |
+
+Negative Auswahl der Fills, gemessen mit der Market-Variante an denselben Tagen:
+
+- H10a: an gefüllten Tagen +7,1 bps brutto, an den 3,5 % nicht gefüllten +43,4 bps. Nicht gefüllt wird genau dann, wenn der Kurs sofort steigt, und das sind die besten Tage
+- H10b: an gefüllten Tagen +0,6 bps, an den 9 % nicht gefüllten +15,7 bps. Das kleine Brutto von H9 B kehrt sich durch die Auswahl ins Minus
+- H10b gegen Zufallsrichtung mit gleicher Ausführung: 18 % der 1.000 Läufe sind mindestens so gut, 95-%-Quantil −0,073 R, H10b −0,084 R
+
+Die Berührungs-Variante ist keine realistische Ausführung: Ein Limit zum aktuellen Open wird damit immer in der ersten Minute gefüllt, das entspricht einem Market-Einstieg zum Maker-Tarif. Sie zeigt nur, was ohne negative Auswahl möglich wäre, und selbst dann erreicht keine Regel das Kriterium.
+
+**Entscheidung H10:** abgelehnt. Mit Limit-Orders sinken die Kosten wie erwartet, aber die Fills sind systematisch schlechter als der Durchschnitt. Bei H10a bleibt netto ein kleiner Rest von +1,6 bps je Trade mit t = 0,8, in R negativ. Kein Nautilus-Lauf, kein OOS-Test.
+
+**Ergebnis H11** (24.10.2026, 29.184 Stunden In-Sample, `python -m scan.umkehr_scan`)
+
+- keine der 54 Zellen erreicht t ≥ 3,3. Ohne Korrektur liegt nur eine Zelle über t = 2 (24-h-Fall um mehr als 4 σ, 24 h danach, 8 Ereignisse) und drei Zellen unter t = −2, zusammen etwa so viele, wie der Zufall bei 54 Zellen erwarten lässt
+- Nach Fällen ist die Folgerendite über 24 h in allen neun Zellen positiv (+16 bis +341 bps), nach Anstiegen geht der Kurs über 24 h in acht von neun Zellen weiter nach oben. Beides ist im Wesentlichen der allgemeine Aufwärtstrend: Über alle Stunden steigt BTC im Mittel um +15,6 bps in 24 h. Nach Fällen um 2 σ liegt die Folgerendite mit +16 bis +17 bps genau auf diesem Niveau
+- über 1 h und 4 h gibt es keine Umkehr. Nach Fällen über 1 h läuft der Kurs eher leicht weiter (−3 bis −25 bps Umkehr, nicht signifikant)
+- Ereignisse über 3 σ und 4 σ sind selten (8 bis 204 je Zelle in 40 Monaten), die großen Mittelwerte der seltenen Zellen hängen an einzelnen Tagen
+
+**Entscheidung H11:** abgelehnt. Eine Umkehr nach starken Bewegungen, die über den allgemeinen Aufwärtstrend hinausgeht, ist auf BTC 2023 bis 2026 nicht messbar. Nach dem vorab festgelegten Protokoll wird keine Handelsregel gebaut. Varianten: 54 Zellen.
