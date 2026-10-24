@@ -11,6 +11,10 @@ dependencies = [
     "pyarrow",
 ]
 
+[project.optional-dependencies]
+# nur für scan/pruefe_trado_features.py (lädt Trados Config)
+pruefung = ["pydantic>=2.7", "pyyaml>=6.0", "python-dotenv>=1.0"]
+
 [tool.uv]
 prerelease = "if-necessary-or-explicit"
 

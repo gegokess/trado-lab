@@ -9,9 +9,10 @@ from lab.instruments import BAR_TYPE_1M, pf_xbtusd
 MIN_NS = 60_000_000_000
 
 
-def load_1m(start: str | None = None, end: str | None = None, allow_oos: bool = False) -> pd.DataFrame:
+def load_1m(start: str | None = None, end: str | None = None, allow_oos: bool = False,
+            symbol: str = SYMBOL) -> pd.DataFrame:
     """1m-Kerzen [start, end) in UTC. Ohne allow_oos=True endet der Zeitraum spätestens bei OOS_START."""
-    path = RAW_DIR / f"{SYMBOL}_1m.parquet"
+    path = RAW_DIR / f"{symbol}_1m.parquet"
     if not path.exists():
         raise FileNotFoundError("Kein Archiv gefunden. Erst `python scripts/fetch_kraken.py` ausführen.")
     df = pd.read_parquet(path)

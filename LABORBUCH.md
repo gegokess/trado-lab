@@ -11,8 +11,8 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H4 | Wie H3, aber der Einstieg muss über dem gesweepten Level liegen | abgelehnt | erster messbarer Effekt (+0,02 R, obere Seite +0,05 R), aber nicht signifikant |
 | H5 | Wie H3, aber Swing-Level aus 4h-Kerzen statt 1h | abgelehnt | klar schlechter als H3, −0,10 R im Mittel |
 | V1 | Funding-Historie und Funding-Simulation im Labor | erledigt | fester Satz aus dem Kraken-Mittel 2026 (+2,85 % p.a.), Kontrolle bestanden |
-| V2 | Struktur-Definitionen aus Trado übernehmen, ETH- und SOL-Perps laden | offen | |
-| H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | offen | |
+| V2 | Struktur-Definitionen aus Trado übernehmen, ETH- und SOL-Perps laden | erledigt | Features an 300 von 300 Zeitpunkten identisch zu Trado |
+| H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | abgelehnt | schon brutto negativ, auf BTC, ETH und SOL, gepoolt −0,07 R brutto |
 | H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | offen | |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
@@ -257,6 +257,20 @@ Zur Wahl standen Ersatzdaten einer anderen Börse, ein Stresstest mit festem Sat
 - Test: Für zehn zufällige Zeitpunkte aus data/sample von Trado müssen Fib-Level und Inducement im Labor identisch zum Trado-Snapshot sein
 - PF_ETHUSD und PF_SOLUSD ab 2023 als 1m-Archiv laden. Sie dienen als Gegenprobe für finale Parameter, ohne den OOS-Zeitraum von BTC zu verbrauchen
 
+**Umsetzung (24.10.2026)**
+
+- lab/trado_features.py lädt structure.py und indicators.py direkt aus dem Trado-Repo (Umgebungsvariable TRADO_DIR, sonst Nachbarordner ../trado) und bildet compute_features zeitpunktgenau nach: je volle Stunde die letzten 600 geschlossenen 1h- und 4h-Kerzen, Features ab 250 Kerzen je Zeitebene, Standardwerte aus Trados Config
+- Zwischenspeicher in data/features, der Dateiname enthält einen Hash der Trado-Dateien. Ändert sich Trado, wird neu gerechnet. Rechenzeit rund 25 s je Markt
+- lab.data.load_1m hat den Parameter symbol, scripts/fetch_kraken.py --symbol lädt weitere Märkte
+
+**Prüfung** (`python -m scan.pruefe_trado_features`, braucht `uv pip install -e ".[pruefung]"`)
+
+- Kerzen: 1h und 4h aus dem 1m-Archiv gegen Trados echte Kraken-Kerzen in trado/data/sample, 1.199 und 599 Kerzen, OHLC und Volumen ohne Abweichung. Die jeweils letzte Kerze im Sample ist unvollständig gespeichert und bleibt außen vor
+- Features: an 300 zufälligen Zeitpunkten (2023 bis 2026) Trados eigenes compute_features gegen das Labor, Fib-Richtung, Ursprung, Extrem, valid, extended, alle Level, Inducement und 4h-ema_trend in allen 300 Fällen identisch
+- Daten: PF_ETHUSD und PF_SOLUSD ab 2023-01-01 geladen, je rund 2,0 Mio. 1m-Kerzen ohne Lücken
+
+**Status V2:** erledigt.
+
 ---
 
 ## H6: Fib-Pullback im Trend
@@ -284,6 +298,39 @@ Zur Wahl standen Ersatzdaten einer anderen Börse, ein Stresstest mit festem Sat
 **Erfolgskriterium, vor dem Rechnen festgelegt:** Eine Zelle gilt als Kandidat für den OOS-Test, wenn sie in Nautilus netto über null liegt, t ≥ 2,5 erreicht (wegen 12 Zellen), ohne die drei besten Trades positiv bleibt, in mindestens zwei der drei vollen Jahre 2023 bis 2025 positiv ist und auf ETH mit denselben Parametern dasselbe Vorzeichen zeigt.
 
 **Folgen für Trado:** Besteht eine Zelle, wird sie als harte Regel in `STRATEGIE-REGELN` eingetragen (Punkte 1, 2, 6, 9). Fällt H6 durch, ist das ein Befund gegen die Grundannahme des System-Prompts und sollte vor dem weiteren Paper-Betrieb besprochen werden.
+
+**Ergebnis Scan BTC** (24.10.2026, In-Sample 2023-02 bis 2026-04, Features ab 250 4h-Kerzen, `python -m scan.fib_pullback_scan`)
+
+| Seite | q | TP | Trades | TP-Quote | R brutto | R netto | t-Wert | R ohne Top 3 | Haltedauer h |
+|---|---|---|---|---|---|---|---|---|---|
+| Long | 0,618 | Extrem | 2 | | | | | | |
+| Long | 0,618 | −0,27 | 232 | 28,9 % | −0,02 | −0,056 | −0,6 | −0,085 | 17,5 |
+| Long | 0,786 | Extrem | 226 | 25,2 % | −0,04 | −0,110 | −1,0 | −0,154 | 7,1 |
+| Long | 0,786 | −0,27 | 222 | 21,6 % | +0,04 | −0,033 | −0,3 | −0,091 | 8,6 |
+| Long | 0,882 | Extrem | 198 | 14,6 % | −0,20 | −0,310 | −2,3 | −0,397 | 4,3 |
+| Long | 0,882 | −0,27 | 195 | 12,8 % | −0,12 | −0,237 | −1,5 | −0,347 | 5,1 |
+| Short | 0,618 | Extrem | 2 | | | | | | |
+| Short | 0,618 | −0,27 | 193 | 32,6 % | +0,04 | +0,014 | +0,1 | −0,019 | 19,2 |
+| Short | 0,786 | Extrem | 172 | 20,3 % | −0,20 | −0,271 | −2,3 | −0,331 | 9,2 |
+| Short | 0,786 | −0,27 | 167 | 17,4 % | −0,14 | −0,208 | −1,5 | −0,286 | 10,3 |
+| Short | 0,882 | Extrem | 153 | 15,0 % | −0,11 | −0,218 | −1,3 | −0,329 | 6,5 |
+| Short | 0,882 | −0,27 | 151 | 12,6 % | −0,07 | −0,182 | −0,9 | −0,326 | 7,1 |
+
+Bei q = 0,618 mit TP am Extrem lässt der CRV-Filter wie erwartet fast nichts durch. Funding macht je Trade nur ±0,004 R aus, Gebühren rund 0,06 R.
+
+**Gegenprobe ETH und SOL, beschreibend:** dasselbe Raster ohne Änderung. Auf ETH keine Zelle netto positiv (bestes −0,039 R), auf SOL drei knapp positiv (Long 0,618/−0,27 mit +0,074 R bei t = 0,8, Long 0,786/−0,27 mit +0,012 R und Long 0,618/Extrem mit nur 15 Trades), auf BTC sind dieselben Zellen negativ. Über alle drei Märkte und 36 Zellen gepoolt (5.858 Trades, Zellen überlappen sich): brutto −0,074 R, netto −0,132 R. Long und Short gleich schlecht.
+
+**Aufteilung nach Inducement, gepoolt über alle Märkte:** Einstieg nach gesweeptem Inducement brutto −0,14 R (1.236 Trades), bei offenem Inducement −0,02 R (801), ohne Inducement im Impuls −0,06 R (3.821). Der gesweepte Köder, der im trade-setup-Skill als gutes Zeichen gilt, ist hier die schlechteste Gruppe.
+
+**Entscheidung H6:** abgelehnt. Keine Zelle erreicht das Erfolgskriterium, die beste auf BTC liegt bei +0,014 R mit t = 0,1. Die Regel ist schon vor Gebühren negativ, und das auf allen drei Märkten. Nach Testprotokoll kein Nautilus-Lauf und kein OOS-Test. Varianten getestet: 12 je Markt, 36 insgesamt.
+
+Besonders deutlich: Je tiefer der Einstieg im Retracement (0,882 statt 0,618), desto schlechter. Das spricht dagegen, dass am 0,882 ein Umkehrpunkt liegt, und eher dafür, dass ein tiefer Rücklauf auf 1h oft in einen Bruch des Ursprungs übergeht.
+
+**Folgen für Trado, zu besprechen:**
+
+- Der Kern dessen, was der System-Prompt Opus nahelegt (Pullback im Trend an Fib 0,618 bis 0,882, Inducement als Timing), hat in seiner regelbasierten Form keinen Vorteil. Was Opus darüber hinaus beiträgt, lässt sich im Labor nicht messen, nur im Paper-Betrieb
+- Fib-Level und Inducement sollten in `STRATEGIE-REGELN` nicht als Einstiegsgrund stehen. Der Prompt sagt schon, sie seien kein Beleg für eine höhere Trefferquote, das ist jetzt auch gemessen
+- Geprüft ist nur diese Geometrie: 1h-Impulse, SL am Ursprung, TP am Extrem oder −0,27, 4h-ema_trend als Filter. Andere Zeitebenen oder Stops wären eigene Hypothesen
 
 ---
 
