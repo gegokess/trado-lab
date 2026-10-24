@@ -7,6 +7,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 |---|---|---|---|
 | H1 | Lange 1h-Wicks werden nach 20 % Füllung bis 80 % weiter gefüllt | abgelehnt | kein Edge, brutto ±0, netto −0,1 bis −0,2 R |
 | H2 | Sweep eines unberührten Swing-Levels kehrt um, Ziel über der Wickbasis | abgelehnt | kein Edge, brutto ±0 bis +0,05, netto −0,006 bis −0,11 R |
+| H3 | Wie H2, aber Einstieg per Limit auf einem Rücklauf unter die Wickbasis | abgelehnt | besser als H2, aber in Nautilus netto −0,008 bis −0,078 R |
 
 ---
 
@@ -84,4 +85,51 @@ Rund 98 % der Trades stimmen in Einstiegsminute und Ausstiegsgrund überein (Nau
 
 **Entscheidung:** abgelehnt. Kein OOS-Test, die Parameter sind nie in den brutto klar positiven Bereich gekommen. Der Sweep hebt die Trefferquote deutlich (62 bis 67 % statt 47 bis 52 % bei H1), aber das Verhältnis aus engem SL (0,2 W) und nahem Ziel (0,5 W über der Wickbasis) frisst die Quote auf: brutto bleibt bestenfalls die Hälfte der Gebühren übrig. Die obere Seite mit k = 1,0 ist mit t = −3,3 klar negativ, dort ist der Sweep nach oben kein Umkehrsignal.
 
-Offener Folgegedanke: Einstieg nicht am Rebound, sondern auf einem Rücklauf unter die Wickbasis (Limit bei T − x × W, also Maker statt Taker und engeres Risiko bei gleichem Ziel). Das ist eine andere Regel und braucht einen eigenen Eintrag.
+Folgegedanke Einstieg auf einem Rücklauf unter die Wickbasis statt am Rebound: als H3 geprüft, ebenfalls abgelehnt.
+
+---
+
+## H3: Liquidity Sweep mit Rücklauf-Einstieg
+
+**Idee (Gregor, 24.10.2026):** Wie H2, aber der Einstieg wartet nicht auf den Rebound, sondern auf einen Rücklauf unter die Wickbasis. Das ergibt eine ruhende Limit-Order statt eines Market-Einstiegs (Maker statt Taker) und ein engeres Risiko bei unverändertem Ziel. H2 hat gezeigt, dass das Signal mit 62 bis 67 % Trefferquote Substanz hat und nur am Verhältnis von Risiko zu Ziel scheitert, genau dort setzt H3 an.
+
+**Regeln** (strategies/sweep_pullback.py, scan/sweep_pullback_scan.py), untere Seite beschrieben, obere spiegelbildlich
+
+- Swing-Tief, unberührt und Referenzlevel S: Definition unverändert aus H2, der Scan importiert sie aus scan/liquidity_sweep_scan.py
+- Wick der laufenden Stunde: Oberkante T = min(Open, Rebound-Hoch), W = T − Tief
+- Setup: W ≥ k_atr × ATR14 der abgeschlossenen 1h-Kerzen und Tief < S ≤ T
+- Einstieg Long als ruhende Limit-Order bei T − pb_w × W (Maker, Post-Only), platziert nur solange der letzte Schlusskurs darüber liegt
+- TP als ruhende Limit-Order bei T + tp_w × W (Maker), SL per Stop-Market bei Tief − sl_w × W (Taker)
+- Einstiegsorder wird gelöscht, sobald das Setup erlischt, und verfällt zur vollen Stunde
+- ein Trade pro Stunde, Zeitstopp 6 h
+- Risiko und Ziel: (1 − pb_w + sl_w) × W gegen (pb_w + tp_w) × W, bei pb_w = 0,2 und tp_w = 0,5 also 1,0 W gegen 0,7 W, in H2 war es 1,2 W gegen 0,5 W
+
+**Vorab festgelegtes Raster** (In-Sample 2023-01-01 bis 2026-04-30, 16 Varianten): Seite untere/obere, k_atr 1,0/1,5, pb_w 0,2/0,4, tp_w 0,5/1,0. Fest: sl_w = 0,2, sw = 3, Zeitstopp 360 min.
+
+**Abgleich Nautilus gegen numba-Scan** (24.10.2026, In-Sample 2023-01 bis 2026-04)
+
+| Seite | k | pb_w | tp_w | Quelle | Trades | TP-Quote | R brutto | R netto | t-Wert | R ohne Top 3 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| untere | 1,5 | 0,2 | 0,5 | numba | 152 | 51,3 % | +0,04 | +0,005 | +0,1 | −0,01 |
+| untere | 1,5 | 0,2 | 0,5 | Nautilus | 142 | 50,0 % | +0,02 | −0,008 | −0,1 | −0,02 |
+| untere | 1,5 | 0,4 | 0,5 | numba | 90 | 42,2 % | +0,06 | +0,013 | +0,1 | −0,03 |
+| untere | 1,5 | 0,4 | 0,5 | Nautilus | 93 | 40,9 % | +0,02 | −0,019 | −0,2 | −0,06 |
+| obere | 1,5 | 0,2 | 1,0 | numba | 155 | 33,5 % | +0,05 | +0,009 | +0,1 | −0,01 |
+| obere | 1,5 | 0,2 | 1,0 | Nautilus | 139 | 29,5 % | +0,00 | −0,041 | −0,5 | −0,07 |
+| untere | 1,0 | 0,2 | 0,5 | numba | 425 | 54,6 % | +0,01 | −0,034 | −0,8 | −0,04 |
+| untere | 1,0 | 0,2 | 0,5 | Nautilus | 391 | 53,7 % | −0,00 | −0,047 | −1,1 | −0,05 |
+| obere | 1,0 | 0,2 | 0,5 | numba | 405 | 53,1 % | −0,03 | −0,081 | −1,9 | −0,09 |
+| obere | 1,0 | 0,2 | 0,5 | Nautilus | 359 | 52,4 % | −0,03 | −0,078 | −1,8 | −0,08 |
+
+**Raster (16 Varianten, In-Sample, Scan):** drei Varianten netto knapp positiv (+0,005 bis +0,013 R), alle mit t-Werten um 0,1 und alle negativ ohne die drei besten Trades. In Nautilus gerechnet kippen alle drei ins Minus. Die übrigen 13 Varianten sind schon im Scan netto negativ und der Scan rechnet H3 systematisch zu gut (siehe unten), deshalb wurden sie nicht einzeln in Nautilus nachgerechnet.
+
+**Befund zum Scan als Vorfilter:** für H3 ist der Scan deutlich unzuverlässiger als für H1 und H2. Deckung mit Nautilus nur 70 bis 89 % bei einem Versatz von +1 Minute (88 bis 94 % in einem Fenster von 0 bis 10 Minuten), gegenüber 96 bis 98 % bei H1 und H2. Der Scan nimmt rund 8 % mehr Trades und liegt netto 0,01 bis 0,05 R zu hoch. Grund ist die ruhende Einstiegsorder: der Scan füllt sie schon in der Minute, in der das Setup entsteht, Nautilus erst ab der Folgeminute, und die Order wandert mit der Wick mit. Für Hypothesen mit Limit-Einstieg ist der Scan also nur zur Vorauswahl der Größenordnung brauchbar, entschieden wird in Nautilus.
+
+Der Versatz von +1 Minute entspricht dem Verhalten bei H1 (ruhende Stop-Order) und nicht dem von H2, wo der Market-Einstieg auf derselben Minute fällt.
+
+**Entscheidung:** abgelehnt. Kein OOS-Test. Der Rücklauf-Einstieg wirkt in die erwartete Richtung: brutto steigt gegenüber H2 von +0,05 auf +0,06 R im Scan, das Risiko sinkt von 1,2 W auf 1,0 W und die Einstiegsgebühr halbiert sich von Taker auf Maker. Das reicht aber nicht über null. Der Preis dafür ist sichtbar: die Limit-Order füllt nur in etwa jedem dritten Setup der H2-Grundgesamtheit (142 gegenüber 198 Trades bei k = 1,5), und die TP-Quote fällt von 63 % auf 50 %, weil der Rücklauf oft gleich bis in den Stop durchläuft.
+
+Damit ist die Idee Sweep als Umkehrsignal in zwei Einstiegsvarianten geprüft und beide Male netto negativ. Weitere Varianten derselben Geometrie sind nicht aussichtsreich, ohne eine neue Zutat. Offene Folgegedanken für eigene Einträge:
+
+- Einstieg nur zulassen, wenn der Rücklauf über dem gesweepten Level S bleibt, also die Rückeroberung erhalten bleibt. In H3 darf der Einstieg unter S liegen, wenn S hoch in der Wick sitzt
+- Sweep auf einem höheren Zeitrahmen (Swing-Level aus 4h statt 1h), damit mehr ruhende Liquidität am Level liegt
