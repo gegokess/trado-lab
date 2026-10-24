@@ -1,0 +1,18 @@
+[project]
+name = "trado-lab"
+version = "0.1.0"
+description = "Backtest-Labor für Trado: Hypothesen schnell scannen (numba) und realistisch prüfen (NautilusTrader)"
+requires-python = ">=3.13,<3.15"
+dependencies = [
+    "nautilus_trader[visualization]>=2.0.0rc7",
+    "numba>=0.61",
+    "numpy",
+    "pandas",
+    "pyarrow",
+]
+
+[tool.uv]
+prerelease = "if-necessary-or-explicit"
+
+[tool.setuptools]
+packages = ["lab", "strategies", "scan"]

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Kursdaten werden per scripts/fetch_kraken.py erzeugt und nicht versioniert
+data/
+
+# Rohausgaben von Nautilus-Läufen (Berichte in runs/ werden versioniert)
+runs/**/raw/
+*.egg-info/
