@@ -10,6 +10,11 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H3 | Wie H2, aber Einstieg per Limit auf einem Rücklauf unter die Wickbasis | abgelehnt | besser als H2, aber in Nautilus netto −0,008 bis −0,078 R |
 | H4 | Wie H3, aber der Einstieg muss über dem gesweepten Level liegen | abgelehnt | erster messbarer Effekt (+0,02 R, obere Seite +0,05 R), aber nicht signifikant |
 | H5 | Wie H3, aber Swing-Level aus 4h-Kerzen statt 1h | abgelehnt | klar schlechter als H3, −0,10 R im Mittel |
+| V1 | Funding-Historie und Funding-Simulation im Labor | in Arbeit | Daten geladen, Funding bei Kraken erst ab 2025-10, Simulationsweg offen |
+| V2 | Struktur-Definitionen aus Trado übernehmen, ETH- und SOL-Perps laden | offen | |
+| H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | offen | |
+| H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | offen | |
+| H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
 
@@ -208,3 +213,132 @@ Festhalten für künftige Hypothesen: die Bedingung Einstieg über dem gesweepte
 **Entscheidung H5:** abgelehnt. Die Annahme, an 4h-Leveln liege mehr ruhende Liquidität und der Sweep sei dort aussagekräftiger, bestätigt sich nicht, das Gegenteil tritt ein. Im Scan ist keine Variante netto über +0,001 R, in Nautilus sind beide nachgerechneten Varianten klar negativ, und die schlechteste Zelle (obere Seite, k = 1,5, pb_w = 0,4) liegt mit −0,37 bis −0,42 R bei t = −2,8 deutlich im Minus. Kein OOS-Test.
 
 Mögliche Erklärung, nicht geprüft: ein 4h-Swing-Tief wird seltener unberührt gesweept, und wenn doch, ist der Durchstich Teil einer größeren Bewegung statt eines Stop-Hunts. Die Umkehrannahme passt dort nicht.
+
+---
+
+## V1: Funding im Labor
+
+**Zweck:** H6 und H7 halten Positionen über Stunden bis Wochen. Ohne Funding wären die Ergebnisse dort systematisch verzerrt.
+
+- Historie über `GET https://futures.kraken.com/derivatives/api/v3/historical-funding-rates?symbol=PF_XBTUSD` nach data/raw laden, analog zu scripts/fetch_kraken.py
+- Abrechnung stündlich auf den Positionswert, im Scan und in Nautilus gleich gerechnet
+- Ergebnisspalte r_funding getrennt von den Gebühren ausweisen, damit sichtbar bleibt, welcher Anteil vom Funding kommt
+- Kontrolle: H2 bis H5 mit Funding neu rechnen. Bei Haltedauern unter 6 h muss sich das Ergebnis um weniger als 0,005 R ändern, sonst ist die Abrechnung falsch
+
+**Stand 24.10.2026:** `python scripts/fetch_derivatives.py` lädt Funding und Open Interest nach data/raw und hängt bei jedem Lauf an das bestehende Archiv an.
+
+- Funding: Der Endpunkt liefert nur das letzte Jahr rollierend, aktuell ab 2025-10-15 (8.972 Stunden, 7 Lücken). Ältere Kraken-Werte gibt es nicht mehr, auch nicht über die Charts-API (dort erst ab 2026-02). Im Mittel des letzten Jahres rund +3,4 % p.a., Longs zahlen
+- Open Interest: stündlich lückenlos ab 2023-03-07 über die Charts-API (Analytics open-interest). Damit sind Hypothesen mit Open Interest doch rückwirkend testbar, anders als bisher angenommen
+- Das Skript sollte regelmäßig laufen, spätestens alle elf Monate, sonst entstehen beim Funding Lücken, die sich nicht mehr schließen lassen
+
+Offene Entscheidung für die Simulation vor 2025-10, noch nicht umgesetzt:
+
+- Weg A: Funding einer anderen Börse als Ersatz (zum Beispiel Binance BTCUSDT, Historie ab 2019, in der Cloud-Umgebung gesperrt, lokal abrufbar), mit dem Kraken-Jahr als Abgleich
+- Weg B: Stresstest mit festem Satz gegen die Position (zum Beispiel 10 und 30 % p.a.) und echtes Kraken-Funding ab 2025-10
+- Weg C: beides, B als Untergrenze der Aussage
+
+---
+
+## V2: Gemeinsame Definitionen und weitere Märkte
+
+**Zweck:** Eine im Labor bestätigte Regel soll in Trado exakt dieselbe Regel sein. Das Labor bestimmt Swings bisher mit sw = 3 und strikt auf beiden Seiten, Trado mit k = 5 und Gleichstand zugunsten des ersten Hochs.
+
+- `find_swings`, `zigzag`, `fib_retracement`, `inducement` und `atr` aus trado/bot/features importieren statt nachzubauen, für H6 Pflicht
+- Zeitpunktgenau rechnen: ein Swing ist erst nutzbar, wenn die k-te Folgekerze geschlossen ist. Fib und Inducement werden zu jedem Zeitpunkt nur aus bis dahin bestätigten Swings gebildet
+- Test: Für zehn zufällige Zeitpunkte aus data/sample von Trado müssen Fib-Level und Inducement im Labor identisch zum Trado-Snapshot sein
+- PF_ETHUSD und PF_SOLUSD ab 2023 als 1m-Archiv laden. Sie dienen als Gegenprobe für finale Parameter, ohne den OOS-Zeitraum von BTC zu verbrauchen
+
+---
+
+## H6: Fib-Pullback im Trend
+
+**Idee (Vorschlag von Claude, von Gregor freigegeben, 24.10.2026):** Trado lässt Opus Pullbacks im Trend an Fib 0,618 bis 0,882 vorschlagen, mit dem Trend der höheren Zeitebene als Filter. Diese Regel ist der Kern dessen, was der Bot handeln soll, und wurde im Labor bisher nicht geprüft. H6 ist die deterministische Fassung davon. Abgrenzung zu H1 bis H5: dort wurde gegen die Wick und ohne Trendfilter gehandelt, hier wird mit dem Trend nach einem Rücklauf eingestiegen.
+
+**Regeln** (strategies/fib_pullback.py, scan/fib_pullback_scan.py), Long beschrieben, Short spiegelbildlich
+
+- Zeitebenen wie Trado: primär 1h, höher 4h, Swings k = 5, Inducement k = 2, Impuls mindestens 2 × ATR14 (1h), alle Definitionen aus V2
+- Trendfilter: ema_trend der abgeschlossenen 4h-Kerzen ist aufwärts (EMA20 > EMA50 und Schluss > EMA50, Definition aus Trados Snapshot)
+- Setup: jüngster Fib-Impuls auf 1h ist aufwärts und valid, der letzte 1h-Schluss liegt über dem Einstiegslevel
+- Einstieg Long als ruhende Limit-Order (Post-Only, Maker) beim Fib-Level q
+- Die Order liegt nur, solange der Kurs höchstens 1 ATR vom Level entfernt ist. Das bildet Trados Abstandsgrenze und das stündlich neu vorgeschlagene Setup nach. Entfernt sich der Kurs weiter, wird sie gelöscht und bei Rückkehr neu gelegt
+- SL per Stop-Market bei Ursprung (1,0) − 0,25 ATR (Taker)
+- TP als ruhende Limit-Order am Extrem (0) oder an der Extension −0,27 (Maker)
+- Filter wie Trados Risiko-Engine: CRV bis TP netto nach Gebühren mindestens 1,5, sonst kein Setup. Bei q = 0,618 mit TP am Extrem fallen dadurch die meisten Setups weg, das ist gewollt und entspricht dem Bot
+- Setup erlischt, wenn ein Schluss den Ursprung bricht, der 4h-Trend kippt oder ein neuer Impuls den alten ersetzt
+- ein Trade je Impuls, keine offene Position in die Gegenrichtung, Zeitstopp 72 h
+- Abweichung von Trado bewusst: ein Ziel statt TP-Aufteilung 50/30/20
+
+**Vorab festgelegtes Raster** (In-Sample 2023-01-01 bis 2026-04-30, 12 Varianten): Seite Long/Short, q 0,618/0,786/0,882, TP Extrem/−0,27. Fest: SL-Puffer 0,25 ATR, Zeitstopp 72 h, Funding aus V1.
+
+**Vorab festgelegte Aufteilung, keine zusätzlichen Varianten:** Innerhalb jeder Zelle werden die Trades getrennt nach Inducement beim Einstieg gesweept oder offen ausgewiesen. Das beantwortet, ob die Inducement-Regel aus dem trade-setup-Skill etwas bringt, ohne das Raster zu verdoppeln.
+
+**Erfolgskriterium, vor dem Rechnen festgelegt:** Eine Zelle gilt als Kandidat für den OOS-Test, wenn sie in Nautilus netto über null liegt, t ≥ 2,5 erreicht (wegen 12 Zellen), ohne die drei besten Trades positiv bleibt, in mindestens zwei der drei vollen Jahre 2023 bis 2025 positiv ist und auf ETH mit denselben Parametern dasselbe Vorzeichen zeigt.
+
+**Folgen für Trado:** Besteht eine Zelle, wird sie als harte Regel in `STRATEGIE-REGELN` eingetragen (Punkte 1, 2, 6, 9). Fällt H6 durch, ist das ein Befund gegen die Grundannahme des System-Prompts und sollte vor dem weiteren Paper-Betrieb besprochen werden.
+
+---
+
+## H7: Donchian-Ausbruch auf Tageskerzen
+
+**Idee (Vorschlag von Claude, von Gregor freigegeben, 24.10.2026):** Zeitreihen-Momentum ist bei BTC der am besten belegte Effekt. Quantpedia fand für 2015 bis 2022, dass Käufe am N-Tage-Hoch besser abschnitten als Halten, mit den besten Werten bei kurzen Lookbacks. Abgrenzung zu allen bisherigen Hypothesen: Einstieg beim Ausbruch statt beim Rücklauf, Haltedauer Tage bis Wochen, weite Stops und damit geringe Gebührenlast in R.
+
+**Regeln** (strategies/donchian.py, scan/donchian_scan.py), Long beschrieben, Short spiegelbildlich und getrennt ausgewertet
+
+- Tageskerzen UTC aus dem 1m-Archiv
+- Signal: Schlusskurs von Tag d über dem höchsten Hoch der N Tage vor d
+- Einstieg per Market zur Eröffnung von d + 1 (Taker)
+- Anfangs-SL per Stop-Market am tiefsten Tief der M Tage vor dem Einstieg, M = N / 2. R = Einstieg − Anfangs-SL
+- Ausstieg: Der Stop wird täglich auf das M-Tage-Tief nachgezogen und nie zurückgesetzt. Kein festes Ziel
+- keine neue Position, solange eine offen ist
+- Funding aus V1 verpflichtend
+
+**Vorab festgelegtes Raster** (In-Sample 2023-01-01 bis 2026-04-30, 6 Varianten): Seite Long/Short, N 10/20/30.
+
+**Statistische Einschränkung, vorab benannt:** Je Seite und Variante sind in 40 Monaten grob 10 bis 30 Trades zu erwarten. BTC allein reicht für eine Aussage nicht. Ausgewertet wird deshalb gepoolt über BTC, ETH und SOL (V2) mit identischen Parametern, BTC wird zusätzlich einzeln gezeigt.
+
+**Erfolgskriterium:** gepoolt netto über null mit t ≥ 2, ohne die drei besten Trades je Markt positiv, auf mindestens zwei der drei Märkte einzeln positiv. Bei Trendfolge ist eine Trefferquote um 35 bis 45 % normal und kein Ablehnungsgrund.
+
+**Folgen für Trado:** Trado kann diesen Setup-Typ heute nicht abbilden (kein Stop-Entry, kein Nachziehen, Verfall nach einer Stunde, der Prompt lehnt Ausbrüche ab). Besteht H7, braucht der Bot einen zweiten, rein regelbasierten Ausführungspfad ohne LLM-Vorschlag.
+
+---
+
+## H8: Uhrzeit-Effekt am Abend UTC
+
+**Idee (Vorschlag von Claude, von Gregor freigegeben, 24.10.2026):** Quantpedia fand für 2015 bis 2022 die stärksten Stundenrenditen bei BTC um 22 und 23 UTC und keine signifikant negative Stunde. Geprüft wird, ob der Effekt 2023 bis 2026 noch besteht und ob er Taker-Gebühren auf beiden Seiten trägt.
+
+**Regeln** (scan/hour_effect_scan.py, Nautilus nur bei positivem Scan)
+
+- Long per Market zur Eröffnung der 21:00-Kerze UTC (Taker)
+- Ausstieg per Market zur Eröffnung der 23:00-Kerze UTC (Taker)
+- Not-SL per Stop-Market bei Einstieg − 1,5 × ATR14 (1h), dient zugleich als R
+- jeder Tag ein Trade, auch am Wochenende
+
+**Vorab festgelegt:** genau eine Regel, das Fenster 21:00 bis 23:00 aus der Quelle. Kein Raster.
+
+**Nur beschreibend, nicht zur Auswahl:** mittlere Netto-Rendite aller 24 Zwei-Stunden-Fenster als Profil, dazu Werktage gegen Wochenende. Ein anderes Fenster, das dort gut aussieht, ist kein Ergebnis von H8, sondern bräuchte eine eigene Hypothese und eine Bestätigung auf ETH.
+
+**Erfolgskriterium:** netto über null, t ≥ 2, in jedem der Jahre 2023, 2024 und 2025 positiv. Als Gebührenschwelle muss die mittlere Brutto-Rendite über 0,06 % je Trade liegen (zweimal Taker).
+
+**Folgen für Trado:** Auch bei knappem Scheitern netto kann ein brutto stabiler Effekt als Zeitfilter dienen (Punkt 10 der `STRATEGIE-REGELN`), zum Beispiel keine Shorts zwischen 21 und 23 UTC.
+
+**Ergebnis Scan** (24.10.2026, In-Sample 2023-01 bis 2026-04, `python -m scan.hour_effect_scan`)
+
+| Teil | Trades | R brutto | R netto | t-Wert | R ohne Top 3 | % brutto | % netto | SL-Quote |
+|---|---|---|---|---|---|---|---|---|
+| alle Tage | 1216 | +0,052 | −0,019 | −1,0 | −0,030 | +0,068 | +0,008 | 10,9 % |
+| Werktage | 869 | +0,049 | −0,006 | −0,3 | −0,017 | +0,076 | +0,016 | 7,7 % |
+| Wochenende | 347 | +0,061 | −0,050 | −1,1 | −0,088 | +0,046 | −0,014 | 19,0 % |
+
+R netto je Jahr: 2023 −0,033, 2024 −0,010, 2025 −0,001, 2026 (bis April) −0,057.
+
+- Brutto ist der Effekt deutlich: +0,068 % je Trade bei t = 3,4 (in R +0,052 bei t = 2,8), und in jedem Jahr positiv (2023 +0,052 %, 2024 +0,088 %, 2025 +0,079 %, 2026 +0,019 %). Das ist zugleich eine Bestätigung außerhalb des Zeitraums der Quelle (2015 bis 2022)
+- Die Gebührenschwelle von 0,06 % wird knapp überschritten, netto bleiben +0,008 % mit t = 0,4. In R gerechnet ist das Ergebnis negativ, weil ruhige Tage mit kleinem ATR und damit kleinem R stärker gewichtet sind
+- Im Profil aller 24 Zwei-Stunden-Fenster ist 21:00 das mit Abstand beste Fenster, als einziges netto in Prozent positiv. Alle übrigen 23 Fenster sind netto negativ, 22:00 und 17:00 brutto noch leicht positiv
+- Am Wochenende ist der Effekt schwächer und der Not-SL greift fast dreimal so oft. Grund ist der kleinere ATR am Wochenende, der Stop liegt dann enger
+
+**Entscheidung H8:** abgelehnt als handelbare Regel. Das Erfolgskriterium (netto über null in R, t ≥ 2, jedes Jahr positiv) ist klar verfehlt. Ein Nautilus-Lauf ist nicht nötig, weil Ein- und Ausstieg reine Market-Orders zu festen Zeiten sind und solche Regeln bei H2 zu 96 bis 98 % mit dem Scan übereinstimmten. Kein OOS-Test.
+
+Festhalten für Trado und künftige Hypothesen:
+
+- Der Abend-Effekt ist brutto real und stabil. Als Zeitfilter in `STRATEGIE-REGELN` Punkt 10 brauchbar, etwa keine neuen Shorts zwischen 21:00 und 23:00 UTC und Long-Setups mit Einstieg vor 21:00 bevorzugen
+- Er reicht nicht, um zwei Taker-Gebühren zu tragen. Offener Folgegedanke als eigene Hypothese: Einstieg und Ausstieg per Limit (Maker) rund um 21:00 und 23:00, mit dem Risiko nicht gefüllter Orders. Bei zweimal Maker läge die Kostenschwelle bei 0,02 % statt 0,06 %
