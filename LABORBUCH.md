@@ -15,6 +15,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | abgelehnt | schon brutto negativ, auf BTC, ETH und SOL, gepoolt −0,07 R brutto |
 | H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | abgelehnt | BTC Long N = 10 in Nautilus +0,30 R bei t = 1,5 (40 Trades), Short negativ |
 | H7c | H7 auf längerer BTC-Historie (Yahoo BTC-USD, 2015 bis 2022) | Kriterium erfüllt, Signal ohne Mehrwert | Long N = 10 +0,91 R bei t = 3,1, Zufallseinstiege mit gleichem Stop sind genauso gut |
+| H9 | Intraday-Momentum: Rendite seit US-Öffnung bestimmt die Richtung der letzten halben Stunde | abgelehnt | Effekt 2023 bis 2026 verschwunden, brutto +1,9 bps, netto −4,1 bps, nicht besser als Zufall |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
@@ -522,3 +523,57 @@ Folgen für Trado:
 - Kein eigener Ausführungspfad für Donchian-Ausbrüche, der Einstieg bringt nichts
 - Was bleibt, ist eine Aussage über die Marktrichtung: Long BTC mit Trailing-Stop am 5-Tage-Tief hat 2015 bis 2026 positiv abgeschnitten, Short in keiner Form. Das ist eine Wette darauf, dass BTC weiter steigt, keine Handelsregel mit Vorteil gegenüber dem Halten
 - Für künftige Hypothesen gehört dieser Kontrollvergleich mit Zufallseinstiegen fest ins Protokoll, sobald eine Regel nur eine Richtung handelt
+
+---
+
+## H9: Intraday-Momentum am Ende der US-Sitzung
+
+**Herkunft (Online-Recherche 24.10.2026, Auftrag Gregor):** Gesucht war die Strategie mit der besten Belegung für BTC allein, die zu den Kosten von Stufe 5 passt und genug Trades für einen Nachweis liefert. Geprüft wurden:
+
+- Intraday-Momentum (Shen, Urquhart, Wang 2022, Financial Review): Bei BTC sagt die Rendite vom Vortagesschluss bis eine halbe Stunde nach der Öffnung die letzte halbe Stunde bis 17 Uhr EST voraus, die vorletzte halbe Stunde sagt sie mit umgekehrtem Vorzeichen voraus. Daten von fünf Börsen inklusive Kraken bis Ende 2020, Out-of-Sample-R² 1,1 bis 1,8 %. Kostendeckung ohne Hebel bei 3, 7 und 10 Basispunkten je Runde für die drei Signale
+- Kurzfristige Umkehr über 15 Minuten bis 4 Stunden: in Krypto klar messbar, brutto aber nur rund 1,3 Basispunkte je Trade und damit unter den Kosten (arXiv 2608.21888, 2026)
+- Umkehr zwischen Tag- und Nachtsitzung (MDPI 2026, Kraken 2016 bis 2025): nach Korrektur für 300 getestete Varianten nicht signifikant, nach Auswahl auf 2016 bis 2020 in 2021 bis 2025 schlechter als Halten
+- Liquidationskaskaden mit anschließender Erholung: keine direkte empirische Studie gefunden, verwandte Arbeiten sehen kurzfristige Umkehr nach Kosten schwach. Liquidationsdaten wären außerdem nicht frei verfügbar
+- Viertelstunden-Effekt (arXiv 2607.09426, 2026): Mikrostruktur in den ersten Sekunden, für 1m-Daten nicht handelbar
+- Stundeneffekte nach den Spot-ETFs (Schmidt und Kraft 2026): keine robuste Richtung nach Mehrfachtest-Korrektur
+
+Ausgewählt wurde das Intraday-Momentum. Gründe: begutachtet und für BTC inklusive Kraken belegt, die Veröffentlichung endet 2020 und 2023 bis 2026 ist damit echter Nachtest, ein Trade an fast jedem Tag und damit genug Stichprobe, Long und Short gleichermaßen statt nur Marktrichtung, und die Kostenschwelle der Studie (10 Basispunkte) liegt über Gregors Kosten von 6 Basispunkten je Runde. Das Fenster fällt zudem in die Abendstunden, in denen H8 brutto einen Effekt gefunden hat.
+
+**Regeln** (scan/intraday_momentum_scan.py), Zeiten wie in der Studie fest in EST = UTC − 5, ohne Sommerzeit
+
+- Tagesschluss 22:00 UTC (17:00 EST), Öffnung Kraken laut Studie 14:15 UTC (9:15 EST)
+- r_ONFH: Rendite vom Schluss 22:00 UTC des Vortags bis 14:45 UTC (eine halbe Stunde nach der Öffnung)
+- r_SLH: Rendite von 21:00 bis 21:30 UTC (vorletzte halbe Stunde)
+- Einstieg per Market zum Open der Minute 21:30 UTC (Taker), Ausstieg per Market zum Open der Minute 22:00 UTC (Taker), kein Stop
+- Signal A: Long wenn r_ONFH > 0, sonst Short
+- Signal B: Long wenn r_SLH < 0, sonst Short
+- Signal C (kombiniert, Haupttest): Long wenn r_ONFH > 0 und r_SLH < 0, Short wenn r_ONFH ≤ 0 und r_SLH ≥ 0, sonst kein Trade
+- Funding über add_funding, bei 30 Minuten vernachlässigbar
+- Auswertung in Basispunkten je Trade und in R mit R = ATR14 der abgeschlossenen 1h-Kerzen zum Einstieg (nur Normierung, kein Stop)
+
+**Vorab festgelegt** (In-Sample 2023-01-01 bis 2026-04-30)
+
+- Haupttest genau eine Zelle: Signal C. A und B werden mit ausgewiesen, zählen aber nicht als eigene Bestätigung
+- Erfolgskriterium für C: netto über null mit t ≥ 2, ohne die drei besten Trades positiv, in jedem der Jahre 2023, 2024 und 2025 netto positiv
+- Kontrolle Zufallsrichtung: an denselben Tagen wie C zufällig Long oder Short, 1.000 Läufe. C muss über dem 95-%-Quantil liegen
+- Kontrolle Marktrichtung: an denselben Tagen immer Long. C muss netto darüber liegen, damit das Ergebnis nicht nur den Abend-Effekt aus H8 abbildet
+- beschreibend: dieselben Regeln in New Yorker Ortszeit mit Sommerzeit (Schluss 17:00 ET), Aufteilung nach Volumen der ersten halben Stunde in Drittel (laut Studie stärker an aktiven Tagen)
+
+**Folgen:** Besteht C, folgt ein Nautilus-Lauf und danach der OOS-Test ab Mai 2026, bei rund einem Trade an jedem zweiten Tag mit etwa 90 Trades aussagekräftig. Für Trado wäre das ein regelbasierter Zeitplan-Trade ohne LLM.
+
+**Ergebnis Scan** (24.10.2026, In-Sample 2023-01 bis 2026-04, 1.215 Tage, `python -m scan.intraday_momentum_scan`)
+
+Zeiten fest in UTC − 5 (Haupttest):
+
+| Signal | Trades | bps brutto | bps netto | R netto | t-Wert | Treffer | R netto 2023 / 2024 / 2025 |
+|---|---|---|---|---|---|---|---|
+| A (r_ONFH) | 1.215 | +0,1 | −5,9 | −0,107 | −7,3 | 36,1 % | −0,13 / −0,05 / −0,15 |
+| B (r_SLH umgekehrt) | 1.215 | +1,9 | −4,1 | −0,090 | −6,1 | 41,7 % | −0,08 / −0,09 / −0,10 |
+| C (kombiniert) | 647 | +1,9 | −4,1 | −0,093 | −4,6 | 38,8 % | −0,09 / −0,06 / −0,14 |
+
+- Kontrolle Marktrichtung: an denselben 647 Tagen immer Long ergibt −5,5 bps netto, C liegt nur 1,4 bps darüber
+- Kontrolle Zufallsrichtung: Mittel der 1.000 Läufe −0,107 R, 95-%-Quantil −0,072 R, C mit −0,093 R liegt darunter. 25 % der Zufallsläufe sind mindestens so gut wie C
+- Volumen der ersten halben Stunde: in allen Dritteln negativ (−2,3 / −4,4 / −5,5 bps netto), anders als in der Studie nicht stärker an aktiven Tagen
+- In New Yorker Ortszeit mit Sommerzeit noch schwächer: alle drei Signale brutto knapp negativ
+
+**Entscheidung H9:** abgelehnt. Der in der Studie bis 2020 belegte Effekt ist auf Kraken 2023 bis 2026 nicht mehr vorhanden. Das Momentum-Signal A hat brutto keinerlei Vorhersagekraft (+0,1 bps), nur die Umkehr der vorletzten halben Stunde (B) zeigt brutto knapp 2 bps, ein Drittel der Kosten. Das passt zu der Studie über kurzfristige Umkehr (rund 1,3 bps brutto, unter den Kosten). Kein Nautilus-Lauf, kein OOS-Test. Varianten: 3 Signale in 2 Zeitzonen, nur C zählte.
