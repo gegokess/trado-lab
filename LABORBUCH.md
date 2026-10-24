@@ -18,6 +18,8 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H9 | Intraday-Momentum: Rendite seit US-Öffnung bestimmt die Richtung der letzten halben Stunde | abgelehnt | Effekt 2023 bis 2026 verschwunden, brutto +1,9 bps, netto −4,1 bps, nicht besser als Zufall |
 | H10 | Die kleinen Brutto-Effekte aus H8 und H9 mit Limit-Orders (Maker) statt Market handeln | abgelehnt | negative Auswahl der Fills frisst die Ersparnis, H10a +1,6 bps netto bei t = 0,8, H10b negativ |
 | H11 | Nach einer sehr starken Bewegung kehrt BTC um (Ereignisstudie, dann Regel) | abgelehnt | 0 von 54 Zellen, nach Fällen nur der allgemeine Aufwärtstrend |
+| H12 | Trendfilter: BTC long über dem 200-Tage-Schnitt, sonst flach, gemessen gegen Halten | abgelehnt | Sharpe 1,13 gegen 1,12, Unterschied nicht gesichert, größter Verlust −70 % statt −83 % |
+| H13 | Carry: BTC als Sicherheit, Perp short, Funding vereinnahmen | abgelehnt | +3,3 % p.a., unter dem US-Leitzins von 3,75 bis 4,00 % |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
@@ -657,3 +659,88 @@ Die Berührungs-Variante ist keine realistische Ausführung: Ein Limit zum aktue
 - Ereignisse über 3 σ und 4 σ sind selten (8 bis 204 je Zelle in 40 Monaten), die großen Mittelwerte der seltenen Zellen hängen an einzelnen Tagen
 
 **Entscheidung H11:** abgelehnt. Eine Umkehr nach starken Bewegungen, die über den allgemeinen Aufwärtstrend hinausgeht, ist auf BTC 2023 bis 2026 nicht messbar. Nach dem vorab festgelegten Protokoll wird keine Handelsregel gebaut. Varianten: 54 Zellen.
+
+---
+
+## Zwischenstand und Abbruchregel (24.10.2026)
+
+Gregors Auftrag: weiter recherchieren, bis eine profitable Strategie gefunden ist. Bisher getestet: H1 bis H11 mit zusammen über 300 Varianten und Zellen. Jede weitere Suche erhöht die Wahrscheinlichkeit eines Zufallstreffers. Deshalb gilt ab hier:
+
+- nur noch Ansätze mit strukturellem Grund (Risikoprämie oder Marktmechanik), nicht nur ein statistisches Muster
+- je Hypothese eine vorab festgelegte Hauptregel, Varianten nur beschreibend
+- höchstens zwei weitere Hypothesen (H12, H13), danach Zusammenfassung statt weiterer Suche
+
+Recherche-Grundlage:
+
+- Trendfilter auf BTC: Grayscale Research (2012 bis 2023) fand mit 50-Tage-Schnitt und 150-Tage-EMA höhere Sharpe Ratios als Halten (1,9 gegen 1,3), ohne Gebühren. Eine vorab registrierte Open-Source-Studie (crypto-trend-research) halbierte mit Trend und Volatilitätssteuerung den größten Verlust (−77 % auf −34 %), lag aber bei der Rendite unter Halten (28 % gegen 44 % p.a.), und der Sharpe-Vorteil war statistisch nicht gesichert
+- Carry: Halten von BTC und gleich großer Short im Perp vereinnahmt das Funding ohne Kursrisiko. Strukturelle Prämie, solange Longs mehr Hebel nachfragen. Die genannte Studie fand mit 25 bps Kosten je Seite einen Verlust, bei Gregors Kosten (3 bps) ist das anders zu bewerten
+
+---
+
+## H12: Trendfilter gegen Halten
+
+**Idee:** Kein Timing-Vorteil beim Einstieg (siehe H7c), sondern Risikosteuerung: BTC nur halten, solange der Trend intakt ist. Die Frage ist nicht, ob die Regel Geld verdient (das tut in einem steigenden Markt fast jede Long-Regel), sondern ob sie risikobereinigt besser ist als einfaches Halten.
+
+**Regeln** (scan/trendfilter_scan.py)
+
+- Tagesschluss UTC. Liegt der Schluss von Tag d über dem einfachen 200-Tage-Schnitt der Schlüsse, ist die Position an Tag d + 1 long mit Faktor 1, sonst flach
+- jeder Wechsel kostet einmal Taker (3 bps), solange long fällt Funding mit dem festen Satz an (Perp)
+- Vergleich: BTC halten ohne Kosten und ohne Funding (Spot)
+
+**Daten:** Yahoo BTC-USD 2015-01-01 bis 2026-04-30 (Hauptauswertung), Teilzeiträume 2015 bis 2022 und 2023 bis April 2026. Für 2023 bis 2026 zusätzlich mit Kraken-Tageskerzen.
+
+**Vorab festgelegt**
+
+- Hauptregel: 200-Tage-Schnitt. Beschreibend: 50-Tage-Schnitt und 150-Tage-EMA aus der Grayscale-Studie, 125-Tage-Schnitt
+- Kennzahlen: Rendite p.a., Volatilität p.a., Sharpe (ohne Zins), größter Verlust, Zeit im Markt, Anzahl Wechsel
+- Erfolgskriterium: Sharpe der Regel höher als beim Halten, mit 95-%-Konfidenzintervall der Differenz über null (Block-Bootstrap mit Wochenblöcken, 2.000 Läufe), und größter Verlust kleiner als beim Halten, jeweils im Gesamtzeitraum
+
+---
+
+## H13: Carry mit BTC als Sicherheit
+
+**Idee:** BTC als Sicherheit bei Kraken Futures hinterlegen und dieselbe Menge PF_XBTUSD short halten. Kursrisiko null (bis auf Abwicklungs- und Börsenrisiko), Ertrag ist das Funding, solange es positiv ist.
+
+**Regeln** (scan/carry_scan.py)
+
+- Short dauerhaft, Ertrag je Stunde = relativeFundingRate von Kraken, Kosten einmal Taker beim Öffnen und Schließen
+- Daten: echtes Kraken-Funding ab 2025-10-15 (nur so weit zurück verfügbar). Der Zeitraum überschneidet sich mit dem OOS-Zeitraum. Das ist hier vertretbar, weil die Regel keine Parameter hat
+- beschreibend zusätzlich: Variante, die nur short ist, wenn das Funding der Vorstunde positiv war
+
+**Kennzahlen:** Ertrag p.a., Anteil Stunden mit negativem Funding, schlechteste 30 Tage, Vergleich mit dem US-Geldmarktzins. Kein Erfolgskriterium im statistischen Sinn, die Frage ist die Größenordnung.
+
+**Ergebnis H12** (24.10.2026, `python -m scan.trendfilter_scan`)
+
+| Regel | Zeitraum | Rendite p.a. | Volatilität | Sharpe | größter Verlust | im Markt | Wechsel |
+|---|---|---|---|---|---|---|---|
+| SMA200 (Haupttest) | 2015 bis 04/2026 | 58,4 % | 52,9 % | 1,13 | −70,2 % | 62 % | 74 |
+| Halten | 2015 bis 04/2026 | 68,3 % | 66,2 % | 1,12 | −83,4 % | 100 % | 0 |
+| SMA200 | 2023 bis 04/2026 | 36,1 % | 39,1 % | 0,98 | −32,0 % | 70 % | 32 |
+| Halten | 2023 bis 04/2026 | 58,2 % | 47,6 % | 1,20 | −49,7 % | 100 % | 0 |
+
+- Sharpe-Differenz SMA200 minus Halten im Gesamtzeitraum: 95-%-Intervall −0,36 bis +0,40, also kein gesicherter Unterschied
+- der größte Verlust ist kleiner (−70 % statt −83 %), die Rendite aber ebenfalls (58 % statt 68 % p.a.). Seit 2023 ist der Filter in allen Kennzahlen außer dem größten Verlust schlechter als Halten
+- Kraken-Schlüsse 2023 bis 2026 liefern praktisch dieselben Zahlen wie Yahoo
+- beschreibend, nicht als Ergebnis zu werten: SMA125 (Sharpe 1,43) und SMA50 (1,39) schneiden im Gesamtzeitraum besser ab als SMA200. Das ist eine Auswahl im Nachhinein aus vier Längen und passt zur Beobachtung der Quelle, dass der 200-Tage-Schnitt unter den Längen eher schwach ist
+
+**Entscheidung H12:** abgelehnt nach dem Kriterium. Der Trendfilter senkt Volatilität und größten Verlust, ist risikobereinigt aber nicht nachweisbar besser als Halten und bringt weniger Rendite. Er ist eine Frage der Risikoneigung, kein Vorteil.
+
+**Ergebnis H13** (24.10.2026, `python -m scan.carry_scan`, Kraken-Funding 15.10.2025 bis 24.10.2026)
+
+- dauerhaft short gegen BTC als Sicherheit: +3,48 % Funding in 374 Tagen, nach Öffnen und Schließen +3,34 % p.a.
+- 30,8 % der Stunden mit negativem Funding, Februar bis April 2026 drei Monate leicht negativ, schlechteste 30 Tage −0,31 %
+- Variante nur bei positivem Vorstunden-Funding: −26 % p.a., weil über 1.000 Wechsel die Gebühren verursachen
+- Vergleich: US-Leitzins seit 16.09.2026 bei 3,75 bis 4,00 %. Ein US-Geldmarktfonds hätte im selben Zeitraum mehr gebracht, ohne Börsen- und Abwicklungsrisiko
+
+**Entscheidung H13:** abgelehnt. Das Carry ist positiv und fast risikolos gegenüber dem BTC-Kurs, liegt aber unter dem Zins für Bargeld. Interessant würde es erst in Phasen mit hohem Funding (in Bullenmärkten historisch 10 % p.a. und mehr), die mit dem verfügbaren Kraken-Jahr nicht abgebildet sind.
+
+---
+
+## Abschluss der Suche (24.10.2026)
+
+Nach der Abbruchregel endet die Suche hier. Getestet wurden 13 Hypothesen mit zusammen über 330 Varianten und Zellen, alle auf BTC.
+
+- Keine Einstiegsregel schlägt nach Kosten den Zufall: Sweeps (H2 bis H5), Fib-Pullback (H6), Ausbrüche (H7, H7c), Uhrzeit (H8), Intraday-Momentum (H9), Limit-Ausführung (H10), Umkehr nach starken Bewegungen (H11)
+- Positiv sind nur Ansätze, die den langfristigen Anstieg von BTC mitnehmen. Sie verdienen Geld, weil BTC gestiegen ist, nicht wegen des Signals. Der Trendfilter (H12) tauscht etwas Rendite gegen kleinere Verluste, ohne risikobereinigt besser zu sein
+- Die einzige strukturelle Prämie (Carry, H13) liegt derzeit unter dem Geldmarktzins
+- Brutto-Effekte von 1 bis 7 bps existieren, sind aber kleiner als die Kosten. Mit Limit-Orders werden sie von der negativen Auswahl der Fills aufgezehrt
