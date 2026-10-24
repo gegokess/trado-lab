@@ -20,6 +20,8 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H11 | Nach einer sehr starken Bewegung kehrt BTC um (Ereignisstudie, dann Regel) | abgelehnt | 0 von 54 Zellen, nach Fällen nur der allgemeine Aufwärtstrend |
 | H12 | Trendfilter: BTC long über dem 200-Tage-Schnitt, sonst flach, gemessen gegen Halten | abgelehnt | Sharpe 1,13 gegen 1,12, Unterschied nicht gesichert, größter Verlust −70 % statt −83 % |
 | H13 | Carry: BTC als Sicherheit, Perp short, Funding vereinnahmen | abgelehnt | +3,3 % p.a., unter dem US-Leitzins von 3,75 bis 4,00 % |
+| H14 | Liquidationskaskade: starker Open-Interest-Aufbau bei Seitwärtskurs, dann Ausbruch aus der 24-h-Range | abgelehnt | −0,18 R bei 75 Trades, schlechter als dieselbe Regel ohne Open Interest |
+| H15 | SMC-Kette: Sweep eines 1h-Swings, MSS auf 5m, Einstieg im FVG | abgelehnt | −0,14 R bei 119 Trades, nicht besser als Zufallsrichtung |
 | H8 | Long von 21:00 bis 23:00 UTC schlägt die Gebühren | abgelehnt | Effekt brutto bestätigt (+0,068 %, t = 3,4), netto −0,019 R |
 
 ---
@@ -744,3 +746,90 @@ Nach der Abbruchregel endet die Suche hier. Getestet wurden 13 Hypothesen mit zu
 - Positiv sind nur Ansätze, die den langfristigen Anstieg von BTC mitnehmen. Sie verdienen Geld, weil BTC gestiegen ist, nicht wegen des Signals. Der Trendfilter (H12) tauscht etwas Rendite gegen kleinere Verluste, ohne risikobereinigt besser zu sein
 - Die einzige strukturelle Prämie (Carry, H13) liegt derzeit unter dem Geldmarktzins
 - Brutto-Effekte von 1 bis 7 bps existieren, sind aber kleiner als die Kosten. Mit Limit-Orders werden sie von der negativen Auswahl der Fills aufgezehrt
+
+---
+
+## Nachtrag zur Abbruchregel (24.10.2026)
+
+Gregor hat nach dem Abschluss zwei weitere Ideen aus einer externen Übersicht freigegeben, beide zu testen. Damit sind es 15 Hypothesen. Für H14 und H15 gilt je genau eine vorab festgelegte Regel und wegen zwei gleichzeitiger Tests die Schwelle t ≥ 2,24 (Bonferroni, 5 %). Danach keine weiteren Hypothesen ohne neuen Marktgrund.
+
+---
+
+## H14: Liquidationskaskade nach Open-Interest-Aufbau
+
+**Idee (externe Übersicht, Gregor 24.10.2026):** Steigt das Open Interest stark, während der Preis seitwärts läuft, bauen Hebel-Trader Positionen auf. Bricht der Preis dann aus der Range, lösen die Stops und Liquidationen der falschen Seite eine Kaskade in Ausbruchsrichtung aus. Ohne Funding-Historie (nur ein Jahr) lässt sich die überfüllte Seite nicht bestimmen, deshalb wird in die Richtung des ersten Ausbruchs gehandelt.
+
+**Daten:** Kraken Open Interest PF_XBTUSD stündlich ab 2023-03-07 (scripts/fetch_derivatives.py). Nur Kraken, nicht der Gesamtmarkt.
+
+**Regeln** (scan/oi_kaskade_scan.py)
+
+- zu jeder vollen Stunde t: ΔOI = OI-Schluss der Stunde vor t gegen OI-Schluss 24 h davor, z_OI = (ΔOI − Mittel) / Standardabweichung der ΔOI der 720 Stunden davor
+- Preis seitwärts: |r_24h| ≤ 1 × σ_24 (Definition wie H11)
+- Setup bei z_OI ≥ 2 und Preis seitwärts. Range = Hoch und Tief der 24 h vor t
+- Einstieg per Stop-Market (Taker) beim ersten Bruch innerhalb von 24 h: über dem Range-Hoch Long, unter dem Range-Tief Short. Bricht eine Minute beide Seiten, kein Trade
+- SL per Stop-Market in der Range-Mitte, TP als Limit eine Range-Höhe jenseits des Ausbruchslevels (Maker), Zeitstopp 24 h. R = Abstand Einstieg zu SL
+- ein Setup zur Zeit, ein neues erst nach Ende des Trades oder Verfall
+- Funding mit festem Satz
+
+**Vorab festgelegt** (In-Sample 2023-03 bis 2026-04)
+
+- Erfolgskriterium: netto über null mit t ≥ 2,24, ohne die drei besten Trades positiv, 2023, 2024 und 2025 jeweils positiv
+- Kontrolle 1, Zufallsrichtung: an denselben Einstiegszeiten mit zufälliger Richtung und gleicher Geometrie, 1.000 Läufe, H14 über dem 95-%-Quantil
+- Kontrolle 2, ohne Open Interest: dieselbe Regel für alle Seitwärts-Setups ohne OI-Bedingung. H14 muss netto darüber liegen, sonst trägt das Open Interest nichts bei
+- beschreibend: ab 2025-10 Aufteilung nach Vorzeichen des echten Fundings beim Einstieg
+
+---
+
+## H15: SMC-Kette mit Sweep, MSS und FVG
+
+**Idee (externe Übersicht, Gregors Trading-Stil, 24.10.2026):** Sweep eines wichtigen Levels mit Docht, Bestätigung durch einen Market Structure Shift auf kleiner Zeiteinheit, Einstieg im Retest des Fair Value Gaps, Stop knapp hinter dem Docht. Abgrenzung zu H2 bis H5: dort nur Sweep und Wick-Geometrie auf 1h, hier die volle Kette mit Bestätigung auf 5m.
+
+**Regeln** (scan/smc_kette_scan.py), Long beschrieben, Short spiegelbildlich
+
+- Level: 1h-Swing-Tiefs nach Trado-Definition (k = 5, nutzbar ab Bestätigung), solange nicht unterschritten
+- Sweep: eine 15m-Kerze handelt unter ein aktives Level und schließt wieder darüber. Sweep-Tief = Tief dieser Kerze. Alle dabei unterschrittenen Level fallen weg
+- MSS: das jüngste bestätigte 5m-Swing-Hoch (k = 2) vor dem Schluss der Sweep-Kerze, höchstens 4 h alt. MSS, wenn innerhalb von 12 Kerzen (1 h) nach dem Sweep ein 5m-Schluss darüber liegt. Fällt der Kurs vorher unter das Sweep-Tief, verfällt das Setup
+- FVG: jüngste bullische Lücke auf 5m zwischen Sweep und MSS (Tief der Kerze i über dem Hoch der Kerze i − 2). Ohne FVG kein Trade
+- Einstieg: Limit (Maker) in der Mitte des FVG, gültig 1 h ab MSS, gelöscht wenn der Kurs vorher unter das Sweep-Tief fällt. Füllung nur bei Durchhandeln (wie H10)
+- SL per Stop-Market 0,1 × ATR14 (1h) unter dem Sweep-Tief, TP als Limit bei 2,5 R (CRV aus der Übersicht), Zeitstopp 24 h
+- nur eine Position zur Zeit
+
+**Vorab festgelegt** (In-Sample 2023-01 bis 2026-04)
+
+- Erfolgskriterium: netto über null mit t ≥ 2,24, ohne die drei besten Trades positiv, 2023, 2024 und 2025 jeweils positiv
+- Kontrolle Zufallsrichtung: an denselben Einstiegszeiten mit zufälliger Richtung, gleichem SL-Abstand und CRV, 1.000 Läufe, H15 über dem 95-%-Quantil
+- beschreibend: Füllung bei Berührung, Anzahl Setups je Stufe der Kette
+
+**Ergebnis H14** (24.10.2026, In-Sample 2023-04 bis 2026-04, `python -m scan.oi_kaskade_scan`)
+
+| Regel | Trades | TP-Quote | R brutto | R netto | t-Wert | R ohne Top 3 | Haltedauer h |
+|---|---|---|---|---|---|---|---|
+| H14 (z_OI ≥ 2, seitwärts) | 75 | 16,0 % | −0,142 | −0,180 | −1,4 | −0,270 | 14,2 |
+| Kontrolle ohne OI-Bedingung | 974 | 25,1 % | +0,063 | +0,015 | +0,4 | +0,009 | 12,9 |
+
+- 460 Setup-Stunden mit starkem OI-Aufbau bei Seitwärtskurs, durch Bündelung und die Regel „ein Setup zur Zeit“ 75 Trades
+- R netto je Jahr: 2023 −0,52, 2024 −0,13, 2025 −0,07, 2026 +0,01
+- Zufallsrichtung an denselben Einstiegen: Mittel −0,108 R, 95-%-Quantil +0,080 R, 75 % der Läufe sind mindestens so gut wie H14
+- Funding ab 2025-10 beschreibend: nur 13 Trades, alle Gruppen negativ
+- Die Bedingung auf das Open Interest verschlechtert die Ausbruchsregel deutlich. Nach starkem OI-Aufbau setzt sich der Ausbruch seltener fort, nicht häufiger
+
+**Entscheidung H14:** abgelehnt. Kein Hinweis auf Kaskaden in Ausbruchsrichtung, die sich mit Kraken-Open-Interest vorhersagen lassen. Einschränkung: Kraken-OI ist nur ein kleiner Teil des Gesamtmarkts.
+
+**Ergebnis H15** (24.10.2026, In-Sample 2023-01 bis 2026-04, `python -m scan.smc_kette_scan`)
+
+Stufen der Kette: 1.579 Sweeps mit Docht-Rückeroberung, davon 267 mit MSS innerhalb einer Stunde, davon 235 mit FVG. Gefüllt wurden 119 Orders (nur eine Position zur Zeit).
+
+| Füllung | Trades | TP-Quote | R brutto | R netto | t-Wert | R ohne Top 3 | Risiko im Median |
+|---|---|---|---|---|---|---|---|
+| Durchhandeln (Haupttest) | 119 | 21,8 % | −0,062 | −0,143 | −1,0 | −0,211 | 52 bps |
+| Berührung (beschreibend) | 120 | 22,5 % | −0,040 | −0,121 | −0,9 | −0,188 | 52 bps |
+
+- Long 57 Trades −0,07 R, Short 62 Trades −0,21 R
+- R netto je Jahr: 2023 −0,37, 2024 +0,02, 2025 −0,17, 2026 +0,06
+- Bei CRV 2,5 liegt die Gewinnschwelle ohne Kosten bei 28,6 % Treffern, erreicht werden 21,8 %
+- Zufallsrichtung mit gleichem Einstieg, Stop-Abstand und CRV: Mittel −0,128 R, 95-%-Quantil +0,067 R, 53 % der Läufe sind mindestens so gut wie H15
+- Gebühren kosten rund 0,08 R je Trade, weil der Stop im Median nur 52 bps entfernt liegt
+
+**Entscheidung H15:** abgelehnt. Die vollständige SMC-Kette ist auf BTC 2023 bis 2026 nicht besser als eine Münze für die Richtung. Kein Nautilus-Lauf, kein OOS-Test.
+
+**Endstand:** 15 Hypothesen, keine mit belegtem Vorteil. Weitere Suche nur mit neuem Marktgrund oder neuen Daten.
