@@ -10,7 +10,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H3 | Wie H2, aber Einstieg per Limit auf einem Rücklauf unter die Wickbasis | abgelehnt | besser als H2, aber in Nautilus netto −0,008 bis −0,078 R |
 | H4 | Wie H3, aber der Einstieg muss über dem gesweepten Level liegen | abgelehnt | erster messbarer Effekt (+0,02 R, obere Seite +0,05 R), aber nicht signifikant |
 | H5 | Wie H3, aber Swing-Level aus 4h-Kerzen statt 1h | abgelehnt | klar schlechter als H3, −0,10 R im Mittel |
-| V1 | Funding-Historie und Funding-Simulation im Labor | in Arbeit | Daten geladen, Funding bei Kraken erst ab 2025-10, Simulationsweg offen |
+| V1 | Funding-Historie und Funding-Simulation im Labor | erledigt | fester Satz aus dem Kraken-Mittel 2026 (+2,85 % p.a.), Kontrolle bestanden |
 | V2 | Struktur-Definitionen aus Trado übernehmen, ETH- und SOL-Perps laden | offen | |
 | H6 | Limit am Fib-Level eines 1h-Impulses in Richtung des 4h-Trends | offen | |
 | H7 | Donchian-Ausbruch auf Tageskerzen (Zeitreihen-Momentum) | offen | |
@@ -231,11 +231,20 @@ Mögliche Erklärung, nicht geprüft: ein 4h-Swing-Tief wird seltener unberührt
 - Open Interest: stündlich lückenlos ab 2023-03-07 über die Charts-API (Analytics open-interest). Damit sind Hypothesen mit Open Interest doch rückwirkend testbar, anders als bisher angenommen
 - Das Skript sollte regelmäßig laufen, spätestens alle elf Monate, sonst entstehen beim Funding Lücken, die sich nicht mehr schließen lassen
 
-Offene Entscheidung für die Simulation vor 2025-10, noch nicht umgesetzt:
+Zur Wahl standen Ersatzdaten einer anderen Börse, ein Stresstest mit festem Satz oder beides.
 
-- Weg A: Funding einer anderen Börse als Ersatz (zum Beispiel Binance BTCUSDT, Historie ab 2019, in der Cloud-Umgebung gesperrt, lokal abrufbar), mit dem Kraken-Jahr als Abgleich
-- Weg B: Stresstest mit festem Satz gegen die Position (zum Beispiel 10 und 30 % p.a.) und echtes Kraken-Funding ab 2025-10
-- Weg C: beides, B als Untergrenze der Aussage
+**Entscheidung Gregor (24.10.2026):** fester Satz aus dem Mittel des Kraken-Fundings 2026 für den ganzen Testzeitraum.
+
+- `FUNDING_RATE_1H = 3.26e-06` in lab/config.py, Mittel vom 2026-01-01 bis 2026-10-24 über 7.113 Stunden, entspricht +2,85 % p.a. Positiv heißt Longs zahlen und Shorts erhalten
+- Monatsmittel 2026 annualisiert zur Einordnung: Januar +7,7 %, Februar bis April −0,8 bis −3,4 %, Mai und Juni um 0, Juli bis Oktober +5,4 bis +9,7 %. 64 % der Stunden positiv
+- Abrechnung anteilig zur Haltedauer: Funding in Preis = Vorzeichen × Satz × Stunden × Einstieg, als r_funding ausgewiesen und von r_net und pct_net abgezogen (`add_funding` in lab/report.py)
+- Nautilus-Läufe über `python -m lab.run` rechnen Funding automatisch ein, die Strategien schreiben dafür den Risikoabstand risk_px ins Trade-Protokoll. Ältere Läufe ohne risk_px werden aus r_gross zurückgerechnet
+- Scans rechnen Funding nicht automatisch, neue Scans mit Haltedauer über einige Stunden (H6, H7) ziehen `add_funding` selbst heran
+- Grenze der Methode: Ein fester Satz bildet keine Phasen mit überhitztem Funding ab. Hypothesen, die gerade solche Phasen handeln, brauchen echte Werte und damit das Kraken-Jahr ab 2025-10
+
+**Kontrolle:** alle 14 gespeicherten Nautilus-Läufe aus H1 bis H5 mit Funding neu ausgewertet. Größte Änderung 0,0015 R (H4, obere Seite, mittlere Haltedauer 2,4 bis 3,5 h), Longs verlieren leicht, Shorts gewinnen leicht. Damit deutlich unter der Grenze von 0,005 R, die Abrechnung ist plausibel. Ein neuer Nautilus-Lauf der H4-Variante (obere Seite, k = 1,5, pb_w = 0,4) liefert r_funding = +0,0015 R, identisch zur Nachrechnung. Für H8 läge der Effekt bei rund −0,001 R und ändert die Entscheidung nicht.
+
+**Status V1:** erledigt.
 
 ---
 

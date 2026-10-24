@@ -19,7 +19,7 @@ from lab.config import OOS_START, RUNS_DIR
 from lab.data import load_1m, to_bars
 from lab.engine import run as run_engine
 from lab.instruments import BAR_TYPE_1M, INSTRUMENT_ID
-from lab.report import summary
+from lab.report import add_funding, summary
 
 
 def _parse(v: str):
@@ -47,7 +47,7 @@ def backtest(name: str, params: dict, start=None, end=None, oos=False, adaptive=
     strat = cls(cfg(instrument_id=INSTRUMENT_ID, bar_type=BAR_TYPE_1M, **params))
     t0 = time.time()
     engine = run_engine(strat, to_bars(df), adaptive_ordering=adaptive)
-    trades = pd.DataFrame(strat.trades)
+    trades = add_funding(pd.DataFrame(strat.trades))
     meta = dict(strategie=name, params=params, start=str(pd.to_datetime(df.ts_open.iloc[0], unit="ms")),
                 ende=str(pd.to_datetime(df.ts_open.iloc[-1], unit="ms")), oos=oos,
                 adaptive_ordering=adaptive, laufzeit_s=round(time.time() - t0, 1))

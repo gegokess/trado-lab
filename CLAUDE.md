@@ -16,7 +16,7 @@ python scripts/fetch_kraken.py        # 1m-Archiv ab 2023 laden oder ergänzen (
 - Daten: Kraken Futures Charts-API, 1m-Kerzen PF_XBTUSD, Zeitstempel = Kerzenbeginn UTC
 - Gebühren Gregor, Stufe 5: Maker 0,01 %, Taker 0,03 % (lab/config.py)
 - Einstieg per Stop-Market ist Taker, TP als ruhende Limit-Order Maker, SL als Stop-Market Taker
-- Funding wird noch nicht simuliert. Bei Haltedauern über einige Stunden im Ergebnis erwähnen
+- Funding als fester Satz `FUNDING_RATE_1H` (Mittel Kraken 2026, lab/config.py), anteilig zur Haltedauer über `add_funding` in lab/report.py. In Nautilus-Läufen automatisch, in Scans selbst aufrufen. Echte Werte nur ab 2025-10 (`python scripts/fetch_derivatives.py`)
 
 ## Testprotokoll
 

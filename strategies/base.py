@@ -68,7 +68,7 @@ class LabStrategy(Strategy):
         risk = abs(e - p.get("sl", e)) * qty or float("nan")
         self.trades.append(dict(
             ts_open=event.ts_opened, ts_close=event.ts_closed, side="long" if sign > 0 else "short",
-            entry=e, exit=x, qty=qty, exit_reason=self._exit_reason or "",
+            entry=e, exit=x, qty=qty, risk_px=abs(e - p.get("sl", e)), exit_reason=self._exit_reason or "",
             r_gross=gross / risk, r_net=(gross - self._fees) / risk,
             pct_net=(gross - self._fees) / (e * qty) * 100, fees=self._fees,
             **{k: v for k, v in p.items() if k not in ("entry", "sl")},
