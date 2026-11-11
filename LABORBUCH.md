@@ -16,6 +16,11 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H9 | ETH und BTC: Wick nach Spike ab 2 % in höchstens 5 Minuten zur Hälfte füllen | abgelehnt | Scan +0,10 bis +0,17 R, Nautilus −0,15 bis +0,04 R, ohne Top 3 überall ≤ 0 |
 | H10 | Wie H9, aber weiterer Stop und Laufenlassen | OOS bestanden, nur BTC obere Seite, Beobachtung | In-Sample +0,13 R (t 4,3), OOS 17 Trades +0,11 R (t 1,0) |
 | H11 | H10 (BTC obere Seite) häufiger: kleinere Spikes, längere Spikes, SOL und XRP | abgelehnt | mehr Trades nur mit deutlich weniger R pro Trade, SOL und XRP ohne Effekt |
+| H12 | H10-Trades mit Liquidationen im Spike laufen besser (Short-Squeeze als Ursache) | nicht gestützt | mehr Liquidationen +0,07 R besser, t 1,1, Kriterium (+0,1 R, t > 2) verfehlt |
+| H13 | H10 nur, wenn vor dem Spike die Shorts überwiegen (Premium oder Kontenverhältnis) | geplant | offen |
+| H14 | Long-Liquidationskaskade nach unten, Long auf den Rücklauf | geplant | offen |
+| H15 | Extremes Premium bzw. Funding kehrt sich über 1 bis 3 Tage um | geplant, braucht Funding im Lab | offen |
+| H16 | BTC-Trend auf Tagesbasis als zweites Standbein mit wenigen Trades | geplant | offen |
 
 ---
 
@@ -457,3 +462,54 @@ Festhalten für künftige Hypothesen: Scans mit sehr engen Einstiegen und Stops 
 - SOL und XRP zeigen keinen Effekt. 2 % sind dort im Verhältnis zur üblichen Schwankung kleiner als bei BTC, ein an die Volatilität angepasster Schwellenwert wurde nicht getestet
 
 **Entscheidung H11:** abgelehnt, die H10-Regel bleibt unverändert. Mit ETH, SOL und XRP gibt es jetzt drei Märkte ohne den Effekt. Das erhöht den Verdacht, dass H10 auf BTC eine Eigenheit oder ein Zufallstreffer ist, und spricht umso mehr für die Papier-Beobachtung vor jedem Einsatz.
+
+---
+
+## H12: Liquidationen als Ursache der H10-Regel
+
+**Idee (Forum-Input, 11.11.2026):** Ein Vorteil entsteht dort, wo jemand zu einem schlechten Preis handeln muss. Bei H10 wäre das ein Short-Squeeze: Liquidierte Shorts kaufen zu jedem Preis, der Spike schießt über, danach läuft ein Teil zurück. Trifft das zu, laufen H10-Trades mit Liquidationen im Spike besser als solche ohne. Ein Unterschied würde H10 erklären, kein Unterschied wäre eine Warnung vor einem Zufallstreffer.
+
+**Daten:** Kraken Futures Analytics, liquidation-volume für PF_XBTUSD als 1-Minuten-Werte ab 2023 (scripts/fetch_analytics.py). Der Wert trennt nicht nach Long und Short. Bei einem Spike nach oben werden aber fast nur Shorts liquidiert.
+
+**Regeln** (festgelegt 2026-11-11 vor dem Rechnen, keine neue Strategie, Auswertung der vorhandenen H10-Trades)
+
+- Trades: finale H10-Variante, In-Sample runs/20261111-204153_spike_fill_sideupper_sl_refstart_sl_w0.1_fill_out0.5 (124 Trades), OOS runs/20261111-203112_spike_fill_sideupper_sl_refstart_sl_w0.1_fill_out0.5_OOS (17 Trades)
+- Spike-Minuten je Trade: Minuten vor dem Einstieg, deren Hoch das höchste der letzten 5 Minuten ist und mindestens 2 % über dem Tief dieser 5 Minuten liegt. Gesucht wird bis 190 Minuten vor dem Einstieg, verwendet wird die letzte zusammenhängende Gruppe (Abstand höchstens 5 Minuten)
+- Liquidationsfenster: 4 Minuten vor der ersten bis 1 Minute nach der letzten Spike-Minute
+- Kennzahl L: Summe des Liquidationsvolumens im Fenster
+- Aufteilung 1: L = 0 gegen L > 0
+- Aufteilung 2: L unter gegen ab dem Median der In-Sample-Trades
+- Keine weiteren Schnitte und keine Suche nach Schwellen
+
+**Kriterium:** Der Mechanismus gilt als gestützt, wenn in beiden Aufteilungen die Gruppe mit mehr Liquidationen um mindestens 0,1 R besser ist und in mindestens einer Aufteilung der t-Wert der Differenz (Welch) über 2 liegt. Nur dann werden die OOS-Trades einmal mit derselben Aufteilung (Median aus In-Sample) geprüft, dort zählt nur die Richtung. Ein Filter für den spike-bot folgt daraus erst nach Papier-Beobachtung.
+
+**Ergebnis** (2026-11-11, runs/20261111-2200_h12_liquidationen, R netto aus den Nautilus-Trades)
+
+| Aufteilung (In-Sample) | wenig Liquidationen | viel Liquidationen | Differenz | t-Wert |
+|---|---|---|---|---|
+| L = 0 / L > 0 | 1 Trade | 123 Trades, +0,133 R | nicht auswertbar | |
+| L unter / ab Median (7,9 BTC) | 62 Trades, +0,099 R, TP 84 % | 62 Trades, +0,169 R, TP 86 % | +0,07 R | 1,1 |
+
+- Aufteilung 1 ist nicht auswertbar: In 123 von 124 Spikes gab es bei Kraken Liquidationen. Ein Spike ohne Liquidationen kommt praktisch nicht vor
+- Aufteilung 2 zeigt die erwartete Richtung, aber zu schwach. Das Kriterium ist verfehlt
+- Liquidationsvolumen und Spike-Höhe hängen eng zusammen (Korrelation 0,63, Spike im Mittel 2,6 % gegen 3,4 %). L misst also zu einem großen Teil nur die Größe des Spikes
+- Kraken ist ein kleiner Teil des Perp-Markts. Die Liquidationen auf Binance, Bybit und OKX, die einen Squeeze treiben, sind in diesen Daten nicht enthalten
+
+Nicht vorab festgelegt, nur zur Beschreibung (keine Grundlage für Entscheidungen):
+
+- Nach Quartilen von L steigt das R von +0,07 über +0,13 und +0,14 auf +0,20, die Rangkorrelation von L mit R liegt aber bei 0,01
+- Nach Spike-Höhe geteilt (Median) +0,06 R gegen +0,21 R. Das wäre eine eigene Hypothese mit eigenem Test
+- Das Auswertungsskript hat die OOS-Trades in einem Durchlauf mitberechnet, obwohl sie laut Regel nur bei erfülltem Kriterium dran waren. OOS lag die Richtung umgekehrt (8 Trades +0,27 R gegen 9 Trades −0,03 R). Bei so wenigen Trades sagt das nichts, es wird hier nur der Vollständigkeit halber genannt
+
+**Entscheidung H12:** Mechanismus mit Kraken-Daten nicht gestützt, aber auch nicht widerlegt, weil Kraken die marktweiten Liquidationen kaum abbildet. H10 bleibt unverändert in der Papier-Beobachtung. H13 baut auf H12 auf und wird zurückgestellt, bis es marktweite Liquidationsdaten gibt oder H14 bzw. H15 etwas Neues zeigen.
+
+---
+
+## H13 bis H16: geplante Hypothesen aus dem Forum-Input
+
+Grundsatz: Jede Regel beginnt bei einem Marktteilnehmer, der zu einem schlechten Preis handeln muss. Die Regeln unten sind Entwürfe und werden vor dem jeweiligen Lauf endgültig festgelegt.
+
+- H13 Positionierung vor dem Spike: H10 nur, wenn vor dem Spike-Start die Shorts überwiegen. Messgrößen Basis bzw. Perp minus Spot im Mittel der 60 Minuten davor und das Kontenverhältnis aus long-short-info. Nur sinnvoll, wenn H12 den Mechanismus stützt
+- H14 Long-Liquidationskaskade: Liquidationsvolumen in höchstens 5 Minuten weit über dem Üblichen bei fallendem Kurs, Long auf den Rücklauf nach dem Muster von H10. Auslöser ist hier der Mechanismus, nicht die Kerzenform
+- H15 Premium- bzw. Funding-Extrem: Basis über mehrere Stunden extrem, danach 1 bis 3 Tage gegen die Mehrheit. Voraussetzung ist eine Funding-Simulation im Lab. Funding-Raten gibt es bei Kraken nur für etwa ein Jahr, die Basis ab 2023
+- H16 Trend auf Tagesbasis: BTC-Momentum mit wenigen Trades pro Jahr als zweites Standbein, das unabhängig von H10 funktioniert
