@@ -1,7 +1,7 @@
 # trado-lab: Regeln für die Zusammenarbeit
 
 Backtest-Labor für Gregors Trading-Bot Trado (Standard: BTC-Perpetual PF_XBTUSD auf Kraken Futures).
-Andere Kraken-Perpetuals per Umgebungsvariable `TRADO_SYMBOL`, z. B. `TRADO_SYMBOL=PF_ETHUSD` (Kontrakte in lab/instruments.py, seit H6).
+Andere Kraken-Perpetuals per Umgebungsvariable `TRADO_SYMBOL`, z. B. `TRADO_SYMBOL=PF_ETHUSD` (Kontrakte in lab/instruments.py, seit H16).
 Ziel: Hypothesen mit festen Regeln prüfen, bevor etwas in Trado übernommen wird.
 
 ## Setup in einer neuen Sitzung
@@ -18,7 +18,7 @@ python scripts/fetch_kraken.py --symbol PF_ETHUSD   # ETH-Archiv, Läufe dann mi
 - Daten: Kraken Futures Charts-API, 1m-Kerzen des eingestellten Symbols, Zeitstempel = Kerzenbeginn UTC
 - Gebühren Gregor, Stufe 5: Maker 0,01 %, Taker 0,03 % (lab/config.py)
 - Einstieg per Stop-Market ist Taker, TP als ruhende Limit-Order Maker, SL als Stop-Market Taker
-- Funding wird noch nicht simuliert. Bei Haltedauern über einige Stunden im Ergebnis erwähnen
+- Funding als fester Satz `FUNDING_RATE_1H` (Mittel Kraken 2026, lab/config.py), anteilig zur Haltedauer über `add_funding` in lab/report.py. In Nautilus-Läufen automatisch, in Scans selbst aufrufen. Echte Werte nur ab 2025-10 (`python scripts/fetch_derivatives.py`)
 
 ## Testprotokoll
 

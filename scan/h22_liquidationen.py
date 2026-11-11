@@ -1,6 +1,6 @@
-"""Aufruf: python scan/h12_liquidationen.py .
+"""Aufruf: python scan/h22_liquidationen.py .
 
-H12: Liquidationen im Spike als Ursache der H10-Regel (Auswertung vorhandener H10-Trades)."""
+H22: Liquidationen im Spike als Ursache der H20-Regel (Auswertung vorhandener H20-Trades)."""
 import json, sys
 from pathlib import Path
 import numpy as np, pandas as pd
@@ -62,6 +62,6 @@ d = t[t.teil == "IS"].copy(); d["viel"] = d.L >= med; d["jahr"] = d.zeit_ein.dt.
 print(d.pivot_table(index="jahr", columns="viel", values="r_net", aggfunc=["count", "mean"]).round(3))
 print("Spike-Stärke im Mittel (wenig/viel):", d.groupby("viel").spike_pct.mean().round(2).to_dict())
 print("Korrelation L mit spike_pct:", round(d.L.corr(d.spike_pct), 2), " Rang-Korr L mit r_net:", round(d.L.rank().corr(d.r_net.rank()), 3))
-out = ROOT / "runs/20261111-2200_h12_liquidationen"; out.mkdir(exist_ok=True)
+out = ROOT / "runs/20261111-2200_h22_liquidationen"; out.mkdir(exist_ok=True)
 t.drop(columns="zeit_ein").to_csv(out / "trades.csv", index=False)
 erg.to_csv(out / "ergebnis.csv", index=False)

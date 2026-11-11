@@ -1,4 +1,4 @@
-"""Hypothese H9: Wick nach Spike zur Hälfte füllen (LABORBUCH.md).
+"""Hypothese H19: Wick nach Spike zur Hälfte füllen (LABORBUCH.md).
 
 Regel (untere Seite: Spike nach unten, Short; obere Seite spiegelbildlich mit Long):
 - Spike: Tief der Minute ist das tiefste der letzten 5 Minuten und liegt mind. spike × S unter dem Hoch S dieser 5 Minuten
@@ -8,9 +8,9 @@ Regel (untere Seite: Spike nach unten, Short; obere Seite spiegelbildlich mit Lo
 - Setup verfällt window Minuten nach dem Tief, Zeitstopp hold_min Minuten, nächster Spike frühestens cooldown Minuten später
 - Während eine Position offen ist, werden keine neuen Spikes gehandelt (im Scan können sich Trades überlappen)
 
-Erweiterung H11: span = Anzahl Minuten, in denen der Spike entstehen darf (Standard 5)
+Erweiterung H21: span = Anzahl Minuten, in denen der Spike entstehen darf (Standard 5)
 
-Erweiterung H10:
+Erweiterung H20:
 - sl_ref = "start": SL über dem Spike-Start bei S + sl_w × M statt über dem Erholungshoch
 - trail_w > 0: kein festes Ziel. Ab trail_start × W Füllung Stop auf den tatsächlichen Einstieg, danach nach jeder
   Minute auf bestes Niveau + trail_w × W nachziehen (nur in Gewinnrichtung). R bleibt auf das Anfangsrisiko bezogen

@@ -1,4 +1,4 @@
-"""Schneller numba-Scan für H9 (Wick nach Spike zur Hälfte füllen), gleiche Regel wie strategies/spike_fill.py.
+"""Schneller numba-Scan für H19 (Wick nach Spike zur Hälfte füllen), gleiche Regel wie strategies/spike_fill.py.
 
 Aufruf:  TRADO_SYMBOL=PF_ETHUSD python -m scan.spike_fill_scan      (Standard: In-Sample bis OOS_START)
 Untere Seite: Spike nach unten, Einstieg Short. Obere Seite über gespiegelte Preise, Einstieg Long.

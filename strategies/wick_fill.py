@@ -4,7 +4,7 @@ Regel (untere Wick, obere Wick spiegelbildlich mit Long):
 - In der laufenden Stunde: Open O, Tief L, höchstes Hoch nach L = Rebound P
 - Wick W = min(O, P) - L, Oberkante T = min(O, P)
 - Setup aktiv, wenn W >= k * ATR14 der abgeschlossenen 1h-Kerzen
-- Optional (H6): bisherige Spanne der Stunde >= min_span (USD) und W >= min_share * Spanne
+- Optional (H16): bisherige Spanne der Stunde >= min_span (USD) und W >= min_share * Spanne
 - Einstieg Short per Stop-Market bei T - fill_in * W (Taker)
 - TP als Limit bei T - fill_out * W (Maker), SL per Stop-Market bei Einstieg + sl_w * W (Taker)
 - Ein Trade pro Stunde, nicht ausgelöste Einstiegsorder verfällt zur vollen Stunde

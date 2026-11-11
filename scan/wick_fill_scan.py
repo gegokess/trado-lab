@@ -83,7 +83,7 @@ def run(df: pd.DataFrame, side: str, k: float, fill_in=0.2, fill_out=0.8, sl_w=0
 
 
 def raster_h6(df):
-    """H6 (LABORBUCH.md): Spanne ab 60 USD, Wick ab 65 %, Einstieg 10 %, SL Oberkante + Puffer, Zeitstopp 24 h."""
+    """H16 (LABORBUCH.md): Spanne ab 60 USD, Wick ab 65 %, Einstieg 10 %, SL Oberkante + Puffer, Zeitstopp 24 h."""
     rows = []
     for side, sl_w, fout in itertools.product(["lower", "upper"], [0.10, 0.15, 0.20, 0.30], [0.8, 1.0]):
         t = run(df, side, 0.0, fill_in=0.1, fill_out=fout, sl_w=sl_w, hold_min=1440, min_span=60.0, min_share=0.65)
