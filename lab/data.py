@@ -4,7 +4,7 @@ import pandas as pd
 from nautilus_trader.model import Bar, Price, Quantity
 
 from lab.config import CATALOG_DIR, OOS_START, RAW_DIR, SYMBOL
-from lab.instruments import BAR_TYPE_1M, pf_xbtusd
+from lab.instruments import BAR_TYPE_1M, instrument
 
 MIN_NS = 60_000_000_000
 
@@ -38,9 +38,11 @@ def to_bars(df: pd.DataFrame) -> list[Bar]:
     """Nautilus-Bars. ts_event = Kerzenbeginn, ts_init = Kerzenende, damit keine Kerze vor ihrem Abschluss sichtbar ist."""
     ts = df.ts_open.values.astype(np.int64) * 1_000_000
     o, h, l, c, v = (df[x].values for x in ("open", "high", "low", "close", "volume"))
+    ins = instrument()
+    pp, sp = ins.price_precision, ins.size_precision
     return [
-        Bar(BAR_TYPE_1M, Price(o[i], 0), Price(h[i], 0), Price(l[i], 0), Price(c[i], 0),
-            Quantity(round(v[i], 4), 4), int(ts[i]), int(ts[i] + MIN_NS))
+        Bar(BAR_TYPE_1M, Price(o[i], pp), Price(h[i], pp), Price(l[i], pp), Price(c[i], pp),
+            Quantity(round(v[i], sp), sp), int(ts[i]), int(ts[i] + MIN_NS))
         for i in range(len(df))
     ]
 
@@ -51,6 +53,6 @@ def write_catalog(df: pd.DataFrame) -> None:
 
     CATALOG_DIR.mkdir(parents=True, exist_ok=True)
     cat = ParquetDataCatalog(str(CATALOG_DIR))
-    cat.write_instruments([pf_xbtusd()])
+    cat.write_instruments([instrument()])
     cat.write_bars(to_bars(df))
     print(f"Katalog geschrieben: {CATALOG_DIR}")

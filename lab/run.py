@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from lab.config import OOS_START, RUNS_DIR
+from lab.config import OOS_START, RUNS_DIR, SYMBOL
 from lab.data import load_1m, to_bars
 from lab.engine import run as run_engine
 from lab.instruments import BAR_TYPE_1M, INSTRUMENT_ID
@@ -48,7 +48,7 @@ def backtest(name: str, params: dict, start=None, end=None, oos=False, adaptive=
     t0 = time.time()
     engine = run_engine(strat, to_bars(df), adaptive_ordering=adaptive)
     trades = pd.DataFrame(strat.trades)
-    meta = dict(strategie=name, params=params, start=str(pd.to_datetime(df.ts_open.iloc[0], unit="ms")),
+    meta = dict(strategie=name, symbol=SYMBOL, params=params, start=str(pd.to_datetime(df.ts_open.iloc[0], unit="ms")),
                 ende=str(pd.to_datetime(df.ts_open.iloc[-1], unit="ms")), oos=oos,
                 adaptive_ordering=adaptive, laufzeit_s=round(time.time() - t0, 1))
     return trades, summary(trades), meta, engine
@@ -57,7 +57,8 @@ def backtest(name: str, params: dict, start=None, end=None, oos=False, adaptive=
 def save(trades, stats, meta) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     tag = "_".join(f"{k}{v}" for k, v in meta["params"].items())
-    d = RUNS_DIR / f"{stamp}_{meta['strategie']}_{tag}{'_OOS' if meta['oos'] else ''}"
+    sym = "" if meta.get("symbol", "PF_XBTUSD") == "PF_XBTUSD" else f"_{meta['symbol']}"
+    d = RUNS_DIR / f"{stamp}_{meta['strategie']}{sym}_{tag}{'_OOS' if meta['oos'] else ''}"
     d.mkdir(parents=True, exist_ok=True)
     trades.to_csv(d / "trades.csv", index=False)
     (d / "ergebnis.json").write_text(json.dumps(dict(meta=meta, kennzahlen=stats), indent=2, ensure_ascii=False))

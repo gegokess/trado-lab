@@ -32,9 +32,9 @@ python -m lab.run wick_fill side=lower k_atr=1.5 sl_w=0.6 --oos
 
 | Pfad | Inhalt |
 |---|---|
-| `lab/config.py` | Symbol, Gebühren, Out-of-Sample-Grenze |
+| `lab/config.py` | Symbol (Umgebungsvariable `TRADO_SYMBOL`, Standard PF_XBTUSD), Gebühren, Out-of-Sample-Grenze |
 | `lab/data.py` | Archiv laden, Nautilus-Bars, Parquet-Katalog |
-| `lab/instruments.py` | Kontrakt PF_XBTUSD |
+| `lab/instruments.py` | Kontrakte PF_XBTUSD und PF_ETHUSD |
 | `lab/engine.py` | simuliertes Kraken-Venue und Backtest-Lauf |
 | `lab/run.py` | Kommandozeile für Nautilus-Läufe |
 | `lab/report.py` | Kennzahlen in R, t-Wert, Jahre |

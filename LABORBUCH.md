@@ -10,6 +10,12 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H3 | Wie H2, aber Einstieg per Limit auf einem Rücklauf unter die Wickbasis | abgelehnt | besser als H2, aber in Nautilus netto −0,008 bis −0,078 R |
 | H4 | Wie H3, aber der Einstieg muss über dem gesweepten Level liegen | abgelehnt | erster messbarer Effekt (+0,02 R, obere Seite +0,05 R), aber nicht signifikant |
 | H5 | Wie H3, aber Swing-Level aus 4h-Kerzen statt 1h | abgelehnt | klar schlechter als H3, −0,10 R im Mittel |
+| H6 | ETH: Wick ab 60 USD Kerzenspanne, Stop knapp über der Wick-Oberkante, Ziel 80 oder 100 % | abgelehnt | Scan netto −0,26 bis +0,17 R, Nautilus t-Werte unter 0,5, ohne Top 3 bei null |
+| H7 | ETH: Limit-Short beim Rücklauf bis 10 bis 15 % vor den Open nach Bewegung ab 30 USD, Ziel 50 % | abgelehnt | alle 48 Varianten schon brutto negativ, netto −0,09 bis −0,40 R |
+| H8 | ETH: freie Parametersuche über Rücklauf-Setups mit Filtern und Trade-Management | abgelehnt | kein über Zeiträume stabiler Vorteil, beste Varianten kippen außerhalb des Suchzeitraums |
+| H9 | ETH und BTC: Wick nach Spike ab 2 % in höchstens 5 Minuten zur Hälfte füllen | abgelehnt | Scan +0,10 bis +0,17 R, Nautilus −0,15 bis +0,04 R, ohne Top 3 überall ≤ 0 |
+| H10 | Wie H9, aber weiterer Stop und Laufenlassen | OOS bestanden, nur BTC obere Seite, Beobachtung | In-Sample +0,13 R (t 4,3), OOS 17 Trades +0,11 R (t 1,0) |
+| H11 | H10 (BTC obere Seite) häufiger: kleinere Spikes, längere Spikes, SOL und XRP | abgelehnt | mehr Trades nur mit deutlich weniger R pro Trade, SOL und XRP ohne Effekt |
 
 ---
 
@@ -208,3 +214,246 @@ Festhalten für künftige Hypothesen: die Bedingung Einstieg über dem gesweepte
 **Entscheidung H5:** abgelehnt. Die Annahme, an 4h-Leveln liege mehr ruhende Liquidität und der Sweep sei dort aussagekräftiger, bestätigt sich nicht, das Gegenteil tritt ein. Im Scan ist keine Variante netto über +0,001 R, in Nautilus sind beide nachgerechneten Varianten klar negativ, und die schlechteste Zelle (obere Seite, k = 1,5, pb_w = 0,4) liegt mit −0,37 bis −0,42 R bei t = −2,8 deutlich im Minus. Kein OOS-Test.
 
 Mögliche Erklärung, nicht geprüft: ein 4h-Swing-Tief wird seltener unberührt gesweept, und wenn doch, ist der Durchstich Teil einer größeren Bewegung statt eines Stop-Hunts. Die Umkehrannahme passt dort nicht.
+
+---
+
+## H6: Wick-Füllung ETH mit Stop an der Oberkante
+
+**Idee (Gregor, 11.11.2026):** Eine große 1h-Kerze spannt sich innerhalb der Stunde auf, läuft zurück und füllt die Wick danach wieder. Läuft der Kurs über die Wick-Oberkante hinaus, ist die Idee widerlegt. Der Stop sitzt deshalb knapp über der Oberkante und nicht im gleichen Abstand wie das Ziel.
+
+**Markt:** PF_ETHUSD auf Kraken Futures, erste Hypothese außerhalb von BTC. Das Symbol ist per Umgebungsvariable TRADO_SYMBOL umschaltbar, Standard bleibt PF_XBTUSD.
+
+**Regeln** (strategies/wick_fill.py und scan/wick_fill_scan.py, erweitert um min_span und min_share)
+
+- Wick der laufenden Stunde wie H1: W = min(Open, Rebound-Hoch) − Tief, obere Wick spiegelbildlich mit Long
+- Setup nur, solange die bisherige Spanne der Stunde (Hoch − Tief) mindestens 60 USD beträgt und W mindestens 65 % dieser Spanne ausmacht. Keine ATR-Bedingung (k_atr = 0)
+- Einstieg per Stop-Market bei 10 % Füllung (fill_in = 0,1)
+- TP als Limit bei fill_out × W, SL per Stop-Market bei Oberkante + Puffer, also sl_w = 0,1 + Puffer
+- Ein Trade pro Stunde, nicht ausgelöste Einstiegsorder verfällt zur vollen Stunde, Zeitstopp 24 h (hold_min = 1440)
+
+**Vorab festgelegtes Raster** (16 Varianten)
+
+- Seite: untere und obere
+- Puffer über der Oberkante: 0, 5, 10 und 20 % von W, also sl_w = 0,10 / 0,15 / 0,20 / 0,30
+- Ziel: fill_out = 0,8 und 1,0
+
+**Vorarbeit im Chat (11.11.2026, eigene Skripte außerhalb des Labors, PF_ETHUSD 1m von 2023-01 bis 2026-11)**
+
+- Ziel 45 % Füllung mit Stop im gleichen Abstand: Wick-Größe über ATR, Prozent vom Kurs und Kerzenspanne in USD variiert. Der Hang zur Füllung ist messbar (bei 10 bis 30 USD Spanne 57 % Ziel zuerst gegen 43 %), wird aber von den Gebühren aufgefressen. Bei großen Wicks ab etwa 2,75 % vom Kurs verschwindet er
+- Stop an der Oberkante, Spanne ab 60 USD, In-Sample bis 2026-04: Trefferquote rund 7 Prozentpunkte über einem Zufallsverlauf, netto +0,18 bis +0,30 R bei 344 Trades, t-Werte 1,4 bis 2,0. Bei Spanne ab 40 USD liegt dieselbe Regel bei null
+- Insgesamt rund 60 Varianten angesehen. Das Raster oben stammt aus dieser Suche und ist damit nicht unabhängig
+- Der OOS-Zeitraum wurde dabei berührt: 10 Trades der Variante ab 60 USD gesehen, überwiegend Verluste. Ein Lauf mit --oos ist für H6 deshalb keine saubere Prüfung mehr. Belastbar wäre nur das Mitprotokollieren neuer Fälle ab 12.11.2026
+- Abweichungen der Chat-Skripte von dieser Regel: Setup wurde einmal ausgelöst und nicht laufend neu geprüft, Einstieg war auch nach Ablauf der Stunde möglich
+
+**Scan über das Raster** (11.11.2026, In-Sample 2023-01 bis 2026-04, `TRADO_SYMBOL=PF_ETHUSD python -m scan.wick_fill_scan --h6`)
+
+- Untere Wick (Short): 180 bis 187 Trades, brutto +0,03 bis +0,16 R, netto −0,26 bis −0,01 R, keine Variante positiv
+- Obere Wick (Long): 89 Trades, brutto +0,15 bis +0,35 R, netto −0,05 bis +0,17 R, beste Variante sl_w = 0,30 und fill_out = 0,8 mit t = 1,05. 2026 in 7 von 8 Varianten um −1 R
+- Jahre widersprüchlich, 2023 mit wenigen Trades durchgehend um −1 R
+
+**Nautilus, die zwei Varianten aus der Chat-Vorarbeit** (runs/20261111-*_PF_ETHUSD_*)
+
+| Seite | sl_w | fill_out | Trades | TP-Quote | R brutto | R netto | t-Wert | ohne Top 3 | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| untere | 0,15 | 1,0 | 193 | 19,7 % | +0,29 | +0,09 | +0,46 | −0,00 | −1,20 | +0,19 | −0,12 | +1,52 |
+| untere | 0,20 | 0,8 | 196 | 26,0 % | +0,09 | −0,05 | −0,36 | −0,11 | −1,15 | +0,03 | −0,20 | +0,81 |
+| obere | 0,15 | 1,0 | 90 | 24,4 % | +0,35 | +0,16 | +0,47 | −0,04 | −1,15 | +0,49 | +0,12 | −1,27 |
+| obere | 0,20 | 0,8 | 91 | 31,9 % | +0,23 | +0,09 | +0,45 | −0,02 | −0,30 | +0,20 | +0,14 | −1,20 |
+
+Nautilus rechnet etwas besser als der Scan (z. B. untere Seite 0,15/1,0: +0,09 gegen −0,04 R), die Abweichung liegt im Bereich weniger großer Gewinner. Nach Abzug der 3 besten Trades bleibt in keiner Variante etwas übrig.
+
+**Entscheidung H6:** abgelehnt. Mit den Labor-Regeln (Setup laufend geprüft, Einstiegsorder verfällt zur vollen Stunde, Fills über Nautilus) verschwindet der Vorteil aus der Chat-Vorarbeit. Dort lag er bei +0,18 bis +0,30 R mit 344 Trades. Er hängt also an Details der Umsetzung, vor allem am Einstieg nach Ablauf der Stunde, und ist kein robuster Effekt. Die TP-Quote liegt zwar über einem Zufallsverlauf, das reicht nach Gebühren aber nicht. Kein OOS-Test, der Zeitraum ist für H6 ohnehin berührt.
+
+Festhalten: Der Hang von ETH-Wicks zur Füllung ist auf 1h messbar (Chat-Vorarbeit), aber klein. Bei kleinen Wicks fressen ihn die Gebühren, bei großen verschwindet er. Ein enger Stop an der Wick-Oberkante verbessert das Chance-Risiko-Verhältnis, macht die Regel aber empfindlich für Ausführungsdetails.
+
+---
+
+## H7: Limit-Short beim Rücklauf zum Open (ETH)
+
+**Idee (Gregor, 11.11.2026):** Der Kurs bewegt sich innerhalb einer Stunde mindestens 30 USD vom Open weg und läuft in derselben Stunde bis auf 10 bis 15 % der Bewegung an den Open zurück. Dort Einstieg gegen den Rücklauf, Ziel 50 % Füllung, Stop leicht über dem Open.
+
+**Regeln** (Skript außerhalb des Repos, Labordaten PF_ETHUSD, In-Sample 2023-01 bis 2026-04)
+
+- Bewegung M = Open − bisheriges Extrem der Stunde, Setup ab M ≥ 30 USD, obere Seite spiegelbildlich mit Long
+- Limit-Order bei Open − f × M (Maker), läuft bei neuem Extrem mit, nur innerhalb der Stunde
+- Ziel Limit bei Open − 0,5 × M, Stop bei Open + s × M (Taker)
+- Raster: f = 0,10 und 0,15, s = 0 / 0,05 / 0,10 / 0,15 / 0,20 / 0,30, Stundenende glattstellen, Stop auf Einstieg oder weiterlaufen lassen (72 Varianten)
+
+**Ergebnis:** Alle Varianten schon brutto negativ (−0,03 bis −0,13 R), netto −0,09 bis −0,40 R bei t-Werten um −3 bis −5. Die Trefferquote liegt in jeder Variante leicht unter der eines Zufallsverlaufs mit gleichem Chance-Risiko-Verhältnis. Fast alle Trades entscheiden sich in 2 bis 11 Minuten.
+
+**Entscheidung H7:** abgelehnt. Ein Rücklauf bis kurz vor den Open hat Schwung und läuft meist durch den Open, statt wieder halb in die Kerze zu fallen. Kein OOS-Test.
+
+---
+
+## H8: Freie Parametersuche über Rücklauf-Setups (ETH)
+
+**Anlass (11.11.2026):** Nach H6 und H7 bewusst breite Suche, um zu sehen, ob irgendeine Variante der Wick- und Rücklauf-Idee trägt. Diese Suche verletzt das Protokoll mit wenigen vorab genannten Varianten absichtlich und ist deshalb nur als Erkundung zu werten.
+
+**Vorgehen** (Skripte außerhalb des Repos, Labordaten PF_ETHUSD)
+
+- Zwei Einstiegsarten: Limit beim Rücklauf (wie H7) oder Stop-Order nach der Umkehr (Rücklaufhoch − p × M)
+- Variiert: Mindestbewegung 10 bis 100 USD, Mindest-Rücklauf 50 bis 95 %, Einstieg, Ziel 40 bis 100 %, Stop über Open bzw. Rücklaufhoch, Einstiegsfenster, Seite, Slippage 0 / 0,2 / 0,5 / 1 USD
+- Gesucht auf 2023 bis 2024, geprüft auf 2025 bis 2026-04, insgesamt rund 25.000 Varianten
+- Danach Filter (12 h ruhig, kein neues 24h-Extrem, Bewegung in höchstens 10 Minuten), Trade-Management (Nachziehen, Teilgewinn, Zeitstopp) und Hebel für mehr Trades (Grenze in ATR, 30m-Perioden, gleitender Startpunkt)
+
+**Befunde**
+
+- Ein erster Durchlauf sah sehr gut aus, das lag an einem Fehler: Stop-Einstiege wurden nicht zum schlechteren Eröffnungskurs der Folgeminute gefüllt. Nach Korrektur und mit 0,50 USD Slippage liegen die 20 besten Varianten aus 2023 bis 2024 im Prüfzeitraum bei −0,04 R
+- Einstieg nach der Umkehr ist klar besser als Limit in den Rücklauf (18 % gegen 1 % der Varianten positiv)
+- Kleine Bewegungen haben brutto einen leichten Vorteil, Gebühren und Slippage kosten bei 1 bis 3 USD Risiko aber 0,3 bis 0,5 R
+- Ungewöhnlich große oder sehr schnelle Bewegungen (ab 2 × ATR, in höchstens 10 Minuten) füllen sich deutlich schlechter, diese Filter verschlechtern jede Variante
+- Kein neues 24h-Extrem plus ruhige 12 h davor verbessert um etwa +0,02 R, macht aber keine Variante robust positiv
+- Feste Ziele schlagen jedes Nachziehen und jeden Teilgewinn, Zeitstopp ändert kaum etwas
+- Auf einen Zeitraum optimierte Varianten verlieren im jeweils anderen (beste auf 2025 bis 2026-04: +0,55 R, in 2023 bis 2024: −0,31 R)
+
+**OOS-Zeitraum berührt:** Für drei Kandidaten wurde der Zeitraum ab 2026-05-01 gerechnet: Long-Variante ab 50 USD (2 Trades, −2,6 R), häufige Variante ab 30 USD (50 Trades, −0,32 R), Filter-Kandidaten (4 bis 19 Trades, −0,16 bis +0,44 R).
+
+**Entscheidung H8:** abgelehnt. Kein Rücklauf-Setup auf ETH 1h trägt über Zeiträume und realistische Ausführung. Die Lehren daraus fließen in H9 ein: Einstieg erst nach der Umkehr, nur große Bewegungen, bescheidenes Ziel.
+
+---
+
+## H9: Wick nach Spike zur Hälfte füllen (ETH und BTC)
+
+**Idee (Gregor, 11.11.2026):** Nach einem Liquidations-Spike wie am 2026-11-08 um 21:55 UTC (ETH −155 USD in einer Minute) wird die Wick gefüllt, wenn man nach dem Ende der Erholung einsteigt und Geduld hat.
+
+**Markt:** PF_ETHUSD und PF_XBTUSD, beide Richtungen
+
+**Regeln** (scan/spike_fill_scan.py, strategies/spike_fill.py, untere Seite, obere spiegelbildlich)
+
+- Spike: Tief einer Minute ist das tiefste der letzten 5 Minuten und liegt mindestens 2 % unter dem Hoch S dieser 5 Minuten. Läuft der Spike in den nächsten 5 Minuten weiter, gilt das neue Tief L. M = S − L
+- Nach einem Spike frühestens 15 Minuten später wieder ein neuer
+- Erholung: Erholungshoch RH seit dem Tief, W = RH − L. Setup gültig ab W ≥ 0,3 × M, verfällt bei neuem Tief nach den ersten 5 Minuten oder 180 Minuten nach dem Tief
+- Einstieg Short per Stop-Market bei RH − 0,1 × W, nachdem die Erholung gestoppt hat
+- TP als Limit bei RH − 0,5 × W (halbe Füllung zurück zum Tief), SL per Stop-Market bei RH + 0,1 × W
+- Zeitstopp 72 h
+- Gebühren wie immer, im Scan 0,02 % Slippage auf Stop- und Market-Orders
+
+**Feste Parameter:** spike = 0,02, rb_min = 0,3, fill_in = 0,1, fill_out = 0,5, sl_w = 0,1, window = 180, hold_min = 4320. Keine weitere Variation im Labor.
+
+**Vorarbeit im Chat (11.11.2026, liq.py außerhalb des Repos, 2023-01 bis 2026-11):** 40 vorab festgelegte Kombinationen je Markt (Spike 1 / 1,5 / 2 / 3 %, mit und ohne Volumenfilter, drei Muster mit fünf Ausstiegen). Nur dieses Muster war in beiden Märkten und allen Zeiträumen positiv:
+
+| Markt | Trades | R 2023 bis 2024 | R 2025 bis 2026-04 | R ab 2026-05 | nur 1. Spike je Tag |
+|---|---|---|---|---|---|
+| ETH | 567 | +0,04 | +0,16 | +0,18 (51) | +0,08, t 1,1 |
+| BTC | 270 | +0,07 | +0,44 | +0,02 (22) | +0,11, t 1,0 |
+
+- Verwandte Muster negativ: Limit-Short bei 50 % Erholung −0,01 bis −0,13 R, Long auf die Erholung −0,11 bis −0,33 R, Volumenfilter verschlechtert
+- Der OOS-Zeitraum wurde in der Vorarbeit mitgerechnet (zusammen mit allen Kombinationen, nicht zur Auswahl genutzt). Der Lauf mit --oos im Labor ist deshalb keine unberührte Prüfung, sondern die realistische Nachrechnung desselben Zeitraums
+- Spikes kommen gehäuft (ETH an 59 Tagen drei oder mehr), die effektive Stichprobe ist deutlich kleiner als die Zahl der Trades
+- Echte Bestätigung nur durch Mitprotokollieren neuer Fälle ab 2026-11-12, falls der Nautilus-Test trägt
+
+**Scan im Labor** (11.11.2026, In-Sample 2023-01 bis 2026-04, `TRADO_SYMBOL=... python -m scan.spike_fill_scan`)
+
+| Markt | Seite | Trades | TP-Quote | R brutto | R netto | t-Wert |
+|---|---|---|---|---|---|---|
+| ETH | untere | 312 | 50,6 % | +0,12 | −0,01 | −0,2 |
+| ETH | obere | 204 | 65,7 % | +0,43 | +0,28 | +3,4 |
+| BTC | untere | 133 | 51,1 % | +0,16 | +0,03 | +0,3 |
+| BTC | obere | 115 | 66,1 % | +0,46 | +0,32 | +2,9 |
+
+Der Scan reproduziert die Vorarbeit genau (ETH beide Seiten 516 Trades, +0,105 R, BTC 248 Trades, +0,166 R). Die Trennung nach Seiten war nicht vorab festgelegt.
+
+**Nautilus** (runs/20261111-2004*_spike_fill_*)
+
+| Markt | Seite | Trades | TP-Quote | R brutto | R netto | t-Wert | ohne Top 3 | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| ETH | untere | 324 | 44,8 % | +0,04 | −0,11 | −1,5 | −0,16 | −0,26 | −0,27 | −0,00 | +0,10 |
+| ETH | obere | 223 | 42,2 % | +0,05 | −0,15 | −1,6 | −0,23 | +0,12 | −0,09 | −0,27 | −0,24 |
+| BTC | untere | 138 | 35,5 % | +0,02 | −0,12 | −1,1 | −0,18 | −0,18 | −0,17 | −0,10 | +0,48 |
+| BTC | obere | 124 | 50,8 % | +0,20 | +0,04 | +0,4 | −0,01 | +0,16 | +0,11 | −0,20 | −0,10 |
+
+**Warum Scan und Nautilus so weit auseinanderliegen**
+
+- Nur rund zwei Drittel der Scan-Trades haben in Nautilus ein Gegenstück. Die fehlenden sind die besten Scan-Trades (ETH obere Seite +0,36 R). Der Scan steigt in der Minute ein, in der die Erholung ihr Hoch macht und wieder fällt, und unterstellt dafür die Reihenfolge Hoch vor Tief. Nautilus kann die Stop-Order erst nach Abschluss der Minute auf das neue Niveau setzen
+- In Spike-Phasen springt der Kurs oft in derselben Minute über Einstieg und Stop. Die Stop-Order nach dem Einstieg wird dann von der Börse abgelehnt und die Position sofort geschlossen, mit Verlusten bis etwa −4 R. Der Scan prüft den Stop erst ab der Folgeminute
+- Auch bei gemeinsamen Trades rechnet Nautilus schlechter (ETH obere Seite +0,24 R im Scan, −0,03 R in Nautilus)
+
+**Fehler beim Bau der Strategie, behoben vor der Wertung:** Spike-Erkennung prüfte zunächst eine falsche Pufferlänge (0 Trades). Ein abgelehnter Stop nach dem Einstieg ließ Positionen ungeschützt 72 h laufen (Einzeltrades bis −55 R). Jetzt schließt die Strategie bei abgelehnter Ausstiegsorder sofort per Market.
+
+**Entscheidung H9:** abgelehnt. Realistisch ausgeführt ist die Regel auf beiden Märkten und beiden Seiten nicht positiv, die einzige knapp positive Zelle (BTC obere Seite) hängt an den drei besten Trades. Kein OOS-Lauf, kein Protokoll-Skript.
+
+Festhalten für künftige Hypothesen: Scans mit sehr engen Einstiegen und Stops (unter etwa 0,3 % vom Kurs) und Einstieg in der Minute der Umkehr überschätzen das Ergebnis deutlich, weil die Reihenfolge innerhalb einer Minute angenommen wird. Das betrifft auch die Chat-Vorarbeit zu H6 bis H8. Solche Regeln nur mit Nautilus bewerten oder mit Trade-Ticks rechnen.
+
+---
+
+## H10: Spike-Füllung mit weiterem Stop und Laufenlassen (ETH und BTC)
+
+**Idee (Gregor, 11.11.2026):** H9 ist in Nautilus vor allem am engen Stop gescheitert, der in Spike-Minuten übersprungen wird. Mit mehr Abstand und der Möglichkeit, Gewinner laufen zu lassen, könnte die Regel tragen.
+
+**Regeln** (strategies/spike_fill.py, erweitert um sl_ref, trail_start, trail_w)
+
+- Spike, Erholung und Einstieg unverändert wie H9 (spike = 0,02, rb_min = 0,3, fill_in = 0,1, window = 180, cooldown = 15)
+- Stop wahlweise über dem Erholungshoch (sl_ref = rh: RH + sl_w × W) oder über dem Spike-Start (sl_ref = start: S + sl_w × M)
+- Laufenlassen (trail_w > 0): kein festes Ziel. Sobald der Kurs trail_start × W vom Erholungshoch Richtung Tief gelaufen ist, Stop auf den tatsächlichen Einstieg, danach nach jeder Minute auf bestes Niveau + trail_w × W nachziehen, nur in Gewinnrichtung
+- Zeitstopp 72 h, Gebühren wie immer, nur Nautilus (der Scan überschätzt solche Regeln, siehe H9)
+
+**Vorab festgelegtes Raster** (9 Kombinationen je Markt und Seite, 36 Läufe, nur In-Sample bis OOS_START)
+
+- Stop: rh mit sl_w = 0,3, rh mit sl_w = 0,5, start mit sl_w = 0,1
+- Ausstieg: festes Ziel fill_out = 0,5, festes Ziel fill_out = 1,0, Laufenlassen mit trail_start = 0,5 und trail_w = 0,5
+
+**Nautilus, In-Sample 2023-01 bis 2026-04** (runs/20261111-2100_spike_fill_H10_raster, R netto)
+
+| Markt | Seite | Stop | Ziel 50 % | Ziel 100 % | laufen lassen |
+|---|---|---|---|---|---|
+| ETH | untere | rh 0,3 / rh 0,5 / start 0,1 | −0,04 / −0,04 / −0,02 | −0,04 / −0,05 / −0,02 | −0,05 / −0,05 / −0,03 |
+| ETH | obere | rh 0,3 / rh 0,5 / start 0,1 | −0,06 / +0,01 / +0,02 | −0,08 / +0,02 / +0,04 | −0,16 / −0,05 / −0,01 |
+| BTC | untere | rh 0,3 / rh 0,5 / start 0,1 | −0,18 / −0,13 / −0,11 | −0,17 / −0,08 / −0,07 | −0,03 / −0,02 / −0,06 |
+| BTC | obere | rh 0,3 / rh 0,5 / start 0,1 | +0,07 / +0,13 / +0,13 | +0,27 / +0,25 / +0,21 | −0,01 / +0,05 / +0,10 |
+
+- Jeder weitere Stop verbessert gegenüber H9 (dort −0,11 bis −0,15 R bei ETH)
+- Laufenlassen ist in 10 von 12 Gruppen schlechter als ein festes Ziel, wie schon in H8
+- ETH bleibt auf beiden Seiten bei null oder leicht negativ, BTC untere Seite negativ
+- BTC obere Seite (Spike nach oben, Long nach dem Ende des Rücksetzers) ist in 8 von 9 Varianten positiv. Bestwerte: start 0,1 mit Ziel 50 % +0,13 R bei t = 4,3, TP-Quote 85 %, alle Jahre positiv (+0,16 / +0,11 / +0,12 / +0,16). Start 0,1 mit Ziel 100 % +0,21 R bei t = 3,3. Nur erster Trade je Tag: +0,13 R (t 3,3) bzw. +0,21 R (t 2,5). Rund 3 Trades pro Monat
+- Prüfung auf Fills in der Einstiegsminute (Reihenfolge innerhalb der Minute angenommen): Bei BTC obere Seite tragen die länger laufenden Trades das Ergebnis (+0,11 bis +0,41 R, t bis 3,1). Trades mit Ausstieg in der ersten Minute liegen um null
+
+**Einordnung:** 36 Zellen gerechnet, die positive Gruppe ist eine von vier Markt-Seiten-Kombinationen und hat auf ETH kein Gegenstück. Das spricht gegen einen allgemeinen Effekt. Für BTC ist es dennoch das stärkste Ergebnis im Labor bisher. Nächster Schritt laut Protokoll: eine Variante festlegen und einmal mit --oos rechnen (Zeitraum ab 2026-05 für diese Regel unberührt, in der H9-Vorarbeit aber mit engem Stop bereits gesehen).
+
+**Finale Variante für den OOS-Test (festgelegt 2026-11-11 vor dem Lauf):** PF_XBTUSD, side = upper, sl_ref = start, sl_w = 0,1, fill_out = 0,5, sonst wie H9. Auswahlgrund: in allen vier Jahren positiv, höchster t-Wert. Einmaliger Lauf mit --oos ab 2026-05-01.
+
+**OOS-Lauf** (2026-11-11, runs/20261111-203112_spike_fill_sideupper_sl_refstart_sl_w0.1_fill_out0.5_OOS, 2026-05-01 bis 2026-11-11)
+
+| Zeitraum | Trades | TP-Quote | R brutto | R netto | t-Wert | ohne Top 3 |
+|---|---|---|---|---|---|---|
+| In-Sample 2023-01 bis 2026-04 | 124 | 84,7 % | +0,16 | +0,13 | 4,3 | +0,11 |
+| OOS 2026-05 bis 2026-11 | 17 | 88,2 % | +0,14 | +0,11 | 1,0 | +0,04 |
+
+- 15 Gewinner mit +0,08 bis +0,51 R, 2 Verlierer mit je −1,04 R, Summe +1,9 R
+- Profil mit hoher Trefferquote und kleinen Gewinnen: typischer Gewinn rund +0,25 R gegen −1 R Verlust. Die Gewinnschwelle liegt bei etwa 80 % Treffern. Sinkt die Trefferquote um wenige Prozentpunkte, wird die Regel negativ
+- Trades gehäuft in wenigen Phasen (Juni und August 2026)
+
+**Entscheidung H10:** OOS bestanden für BTC obere Seite mit Stop über dem Spike-Start und Ziel 50 %. Wegen kleiner OOS-Stichprobe, fehlendem Gegenstück auf ETH und dem engen Abstand zur Gewinnschwelle noch kein Einsatz in Trado. Nächster Schritt: neue Fälle ab 2026-11-12 mitprotokollieren (Paper), Entscheidung nach etwa 30 weiteren Trades.
+
+---
+
+## H11: Mehr Trades für die H10-Regel
+
+**Ziel (Gregor, 11.11.2026):** Die H10-Regel (BTC, Spike nach oben, Stop über Spike-Start, Ziel 50 %) handelt nur etwa 3-mal im Monat. Gesucht sind mehr Trades ohne schlechteres Ergebnis pro Trade.
+
+**Basis:** strategies/spike_fill.py mit side = upper, sl_ref = start, sl_w = 0,1, fill_out = 0,5, sonst wie H9. In-Sample BTC: 124 Trades, +0,134 R, t 4,3.
+
+**Vorab festgelegte Läufe** (nur Nautilus, nur In-Sample bis OOS_START, je ein Hebel gegenüber der Basis)
+
+- Kleinere Spikes: spike = 0,015 und 0,0175 (BTC)
+- Längere Spikes: Spike-Dauer span = 10 und 15 Minuten statt 5, neuer Parameter span (BTC)
+- Weitere Märkte: PF_SOLUSD (Tick 0,01) und PF_XRPUSD (Tick 0,0001) mit der Basisregel, Kontrakte neu in lab/instruments.py
+
+**Übernahmekriterium:** R netto pro Trade nicht unter +0,13 und R pro Monat höher als bei der Basis. Der OOS-Zeitraum ist für die H10-Regel verbraucht, übernommene Hebel gelten nur nach Papier-Beobachtung als bestätigt.
+
+**Ergebnis** (2026-11-11, Nautilus, In-Sample 2023-01 bis 2026-04, runs/20261111-204*)
+
+| Lauf | Trades | Trades pro Monat | TP-Quote | R netto | t-Wert | R gesamt | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Basis BTC (2 %, 5 Min.) | 124 | 3,1 | 84,7 % | +0,134 | 4,3 | +16,6 | +0,16 | +0,11 | +0,12 | +0,16 |
+| BTC spike = 0,015 | 269 | 6,7 | 76,2 % | +0,022 | 0,8 | +5,9 | +0,06 | +0,03 | −0,07 | +0,03 |
+| BTC spike = 0,0175 | 174 | 4,4 | 79,3 % | +0,064 | 2,1 | +11,1 | +0,07 | +0,05 | +0,07 | +0,09 |
+| BTC span = 10 | 171 | 4,3 | 81,3 % | +0,061 | 1,9 | +10,4 | +0,05 | +0,08 | −0,03 | +0,19 |
+| BTC span = 15 | 207 | 5,2 | 84,5 % | +0,043 | 1,6 | +8,9 | +0,05 | +0,06 | −0,05 | +0,12 |
+| SOL Basis | 672 | 16,8 | 68,8 % | −0,027 | −1,3 | −18,1 | −0,05 | −0,01 | −0,03 | +0,03 |
+| XRP Basis | 592 | 14,8 | 70,3 % | +0,000 | 0,0 | +0,0 | +0,13 | −0,03 | −0,03 | +0,01 |
+
+- Jeder BTC-Hebel bringt 40 bis 120 % mehr Trades, halbiert aber mindestens das R pro Trade. Der Gesamtgewinn sinkt in allen Fällen gegenüber der Basis
+- Die zusätzlichen Trades sind also deutlich schlechter als die der Basis, die 2-%-Grenze in 5 Minuten trennt gute von mittelmäßigen Fällen
+- SOL und XRP zeigen keinen Effekt. 2 % sind dort im Verhältnis zur üblichen Schwankung kleiner als bei BTC, ein an die Volatilität angepasster Schwellenwert wurde nicht getestet
+
+**Entscheidung H11:** abgelehnt, die H10-Regel bleibt unverändert. Mit ETH, SOL und XRP gibt es jetzt drei Märkte ohne den Effekt. Das erhöht den Verdacht, dass H10 auf BTC eine Eigenheit oder ein Zufallstreffer ist, und spricht umso mehr für die Papier-Beobachtung vor jedem Einsatz.

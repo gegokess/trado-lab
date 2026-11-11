@@ -8,7 +8,7 @@ from nautilus_trader.execution import MakerTakerFeeModel
 from nautilus_trader.model import AccountType, Currency, Money, OmsType, TraderId, Venue
 
 from lab.config import MAKER_FEE, TAKER_FEE, VENUE
-from lab.instruments import pf_xbtusd
+from lab.instruments import instrument
 
 USD = Currency.from_str("USD")
 KRAKEN = Venue(VENUE)
@@ -37,7 +37,7 @@ def run(strategy, bars, *, adaptive_ordering: bool = True, start_balance: float 
         bar_execution=True,
         bar_adaptive_high_low_ordering=adaptive_ordering,
     )
-    engine.add_instrument(pf_xbtusd())
+    engine.add_instrument(instrument())
     engine.add_data(bars)
     engine.add_strategy(strategy)
     engine.run()
