@@ -1,4 +1,5 @@
 """Zentrale Einstellungen für alle Tests. Änderungen hier betreffen jeden Lauf."""
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,7 +9,9 @@ CATALOG_DIR = DATA_DIR / "catalog"
 RUNS_DIR = ROOT / "runs"
 
 # Markt
-SYMBOL = "PF_XBTUSD"          # Kraken Futures, linearer BTC-Perpetual
+# Kraken Futures, lineare Perpetuals. Standard BTC, andere Märkte per Umgebungsvariable,
+# z. B. TRADO_SYMBOL=PF_ETHUSD python -m lab.run ... (Kontrakte in lab/instruments.py)
+SYMBOL = os.environ.get("TRADO_SYMBOL", "PF_XBTUSD")
 VENUE = "KRAKEN"
 DATA_START = "2023-01-01"     # Beginn des Datenarchivs (UTC)
 

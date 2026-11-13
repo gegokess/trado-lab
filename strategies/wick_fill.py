@@ -4,6 +4,7 @@ Regel (untere Wick, obere Wick spiegelbildlich mit Long):
 - In der laufenden Stunde: Open O, Tief L, höchstes Hoch nach L = Rebound P
 - Wick W = min(O, P) - L, Oberkante T = min(O, P)
 - Setup aktiv, wenn W >= k * ATR14 der abgeschlossenen 1h-Kerzen
+- Optional (H16): bisherige Spanne der Stunde >= min_span (USD) und W >= min_share * Spanne
 - Einstieg Short per Stop-Market bei T - fill_in * W (Taker)
 - TP als Limit bei T - fill_out * W (Maker), SL per Stop-Market bei Einstieg + sl_w * W (Taker)
 - Ein Trade pro Stunde, nicht ausgelöste Einstiegsorder verfällt zur vollen Stunde
@@ -25,11 +26,13 @@ class WickFillConfig(StrategyConfig):
     def __init__(self, *, instrument_id: InstrumentId, bar_type: BarType,
                  side: str = "lower",      # "lower" = untere Wick -> Short, "upper" = obere Wick -> Long
                  k_atr: float = 1.5, fill_in: float = 0.2, fill_out: float = 0.8,
-                 sl_w: float = 0.6, hold_min: int = 360, qty: str = "0.01", **_kw) -> None:
+                 sl_w: float = 0.6, hold_min: int = 360, qty: str = "0.01",
+                 min_span: float = 0.0, min_share: float = 0.0, **_kw) -> None:
         super().__init__()
         self.instrument_id, self.bar_type, self.side = instrument_id, bar_type, side
         self.k_atr, self.fill_in, self.fill_out, self.sl_w = k_atr, fill_in, fill_out, sl_w
         self.hold_min, self.qty = hold_min, qty
+        self.min_span, self.min_share = min_span, min_share   # 0 = Filter aus
 
 
 class WickFill(LabStrategy):
@@ -105,6 +108,10 @@ class WickFill(LabStrategy):
         T = min(self.O, self.P)
         W = T - self.L
         if W <= 0 or W < c.k_atr * atr:
+            self._cancel_entry()
+            return
+        span = self.h_hi - self.h_lo
+        if span < c.min_span or W < c.min_share * span:
             self._cancel_entry()
             return
         mE, mTP = T - c.fill_in * W, T - c.fill_out * W

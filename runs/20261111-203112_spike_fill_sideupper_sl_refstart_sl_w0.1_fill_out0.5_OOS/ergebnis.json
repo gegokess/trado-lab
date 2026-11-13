@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "strategie": "spike_fill",
+    "symbol": "PF_XBTUSD",
+    "params": {
+      "side": "upper",
+      "sl_ref": "start",
+      "sl_w": 0.1,
+      "fill_out": 0.5
+    },
+    "start": "2026-05-01 00:00:00",
+    "ende": "2026-11-11 20:28:00",
+    "oos": true,
+    "adaptive_ordering": true,
+    "laufzeit_s": 1.5
+  },
+  "kennzahlen": {
+    "n": 17,
+    "tp_quote": 0.8823529411764706,
+    "r_brutto": 0.13885673659810002,
+    "r_netto": 0.11197985907146117,
+    "t_wert": 1.0152291353575311,
+    "r_ohne_top3": 0.03560520996239366,
+    "r_2026": 0.11197985907146117
+  }
+}
