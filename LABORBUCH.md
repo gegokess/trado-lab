@@ -37,6 +37,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H27 | H20 mit Entscheidung alle 10 Sekunden statt nach Kerzenschluss | geplant, lokal als H17 begonnen, noch nicht in main | offen |
 | H28 | Trendfilter rückwirkend auf alle vorhandenen Trade-Listen: nur mit dem 4h-Trend handeln | T2 formal erfüllt, T1 nicht | Struktur-Filter hebt R in 76 % der Läufe, Median +0,06 R, macht aber keine Strategie tragfähig |
 | H29 | Zonen-Setups mit dem Trend (Rücklauf in Zone, Ausbruch und Retest), danach Stop- und Ziel-Varianten | abgelehnt in Stufe 1 | 0 von 32 Zellen besser als verschobene Kontrollzonen, bester t-Wert 1,3 |
+| H30 | H20 mit Teilzielen, Stop auf Einstieg nach dem ersten Ziel und nachgezogenem Rest | abgelehnt | höchstens +0,016 R je Trade mehr, aus wenigen großen Trades, in 2024 bis 2026 nicht besser |
 
 ---
 
@@ -1231,3 +1232,41 @@ Grundsatz: Jede Regel beginnt bei einem Marktteilnehmer, der zu einem schlechten
 - Gebühren fehlen noch. Bei R-Abständen von meist 0,5 bis 1,5 ATR (4h) kosten sie etwa 0,02 bis 0,05 R je Trade
 
 **Entscheidung H29:** In Stufe 1 abgelehnt. Die Zonen tragen gegenüber zufälligen Niveaus keine Information, die ein 1:1-Bracket ausnutzen könnte. Stufe 2 (Teilziele, nachgezogener Stop) wird für diese Setups nicht gerechnet, weil ein Ausstieg aus einem Einstieg ohne Vorteil keinen Vorteil macht. Getestet: 32 Zellen, dazu je Zelle 5 Kontrollreihen.
+
+---
+
+## H30: Teilziele und nachgezogener Stop für die H20-Regel
+
+**Idee (Gregor, 13.11.2026):** Mehrere Ziele und ein sinnvoll nachgezogener Stop könnten mehr aus den Trades holen. Geprüft wird das an der einzigen Regel mit belegtem Vorteil (H20), weil ein Ausstieg aus einem Einstieg ohne Vorteil keinen Vorteil macht (siehe H29). Bisher bekannt: Ein festes Ziel bei 100 % war In-Sample +0,21 R (t 3,3), Laufenlassen ab 50 % mit Abstand 0,5 W +0,10 R. Teilziele wurden noch nicht geprüft.
+
+**Regeln** (festgelegt 2026-11-13 vor dem Rechnen, strategies/spike_fill.py erweitert um tps, be_nach_tp1, trail15)
+
+- Einstieg, Stop und alle übrigen Parameter wie die finale H20-Variante (side = upper, sl_ref = start, sl_w = 0,1, Spike 2 % in 5 Minuten)
+- Ziele als Füllgrad des Rücklaufs W vom Rücklauf-Tief aus gemessen (50 % = bisheriges Ziel, 100 % = Spike-Hoch, 150 % = halbes W über dem Spike-Hoch), je als Post-Only-Limit (Maker)
+- A0 Basis: ein Ziel bei 50 % (vorhandener Lauf, 124 Trades, +0,134 R)
+- A1: 50 / 30 / 20 % der Menge bei 50 / 100 / 150 %, nach dem ersten Ziel Stop auf den Einstieg
+- A2: 50 / 50 % bei 50 / 100 %, nach dem ersten Ziel Stop auf den Einstieg
+- A3: 50 % bei 50 %, danach Stop auf den Einstieg und nach jeder abgeschlossenen 15-Minuten-Kerze unter das letzte bekannte 15m-Swing-Tief (k = 2) nachgezogen, nur in Gewinnrichtung, kein weiteres Ziel
+- R bezogen auf das Anfangsrisiko der ganzen Position, netto mit Gebühren und Funding, Nautilus mit adaptiver Reihenfolge
+
+**Kriterium:** Eine Variante ersetzt A0, wenn sie In-Sample je Trade mindestens 0,02 R und in Summe mehr bringt, t ≥ 2,5 erreicht, ohne die drei besten Trades positiv bleibt und in mindestens drei der vier Jahre nicht schlechter ist als A0. Dann genau ein OOS-Lauf. Der OOS-Zeitraum wurde mit A0 schon gesehen, dort zählt deshalb nur, dass die Variante nicht schlechter ist als A0. Getestet werden genau drei Varianten.
+
+**Umsetzung:** Nautilus 2.0.0rc7 setzt offene Reduce-Only-Orders nach jedem Teil-Fill auf die ganze Restposition hoch (OrderUpdated). Das zweite Ziel hätte dann alles geschlossen, A1 und A2 lieferten im ersten Lauf identische Ergebnisse. Die Strategie setzt die Teilziele deshalb nach jedem solchen Update auf ihre geplante Menge zurück (on_order_updated). Die ersten, fehlerhaften Läufe wurden verworfen.
+
+**Ergebnis** (2026-11-13, runs/20261113-*_h30_A0 bis A3, In-Sample 2023-01 bis 2026-04, netto mit Gebühren und Funding)
+
+| Variante | Trades | R netto | t-Wert | ohne Top 3 | R gesamt | 2023 | 2024 | 2025 | 2026 | Haltedauer Mittel |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A0 ein Ziel 50 % | 124 | +0,134 | 4,3 | +0,110 | +16,6 | +0,16 | +0,11 | +0,12 | +0,16 | 1,5 h |
+| A1 50/30/20 bei 50/100/150 %, dann Stop auf Einstieg | 123 | +0,150 | 3,9 | +0,109 | +18,4 | +0,24 | +0,11 | +0,12 | +0,12 | 2,4 h |
+| A2 50/50 bei 50/100 %, dann Stop auf Einstieg | 124 | +0,144 | 3,8 | +0,104 | +17,8 | +0,21 | +0,11 | +0,12 | +0,12 | 1,9 h |
+| A3 50 % bei 50 %, Rest unter 15m-Swing-Tiefs nachgezogen | 114 | +0,141 | 2,9 | +0,085 | +16,1 | +0,18 | +0,08 | +0,27 | +0,07 | 2,6 h |
+
+- Alle drei Varianten liegen knapp über A0, aber unter der Schwelle von +0,02 R je Trade
+- Der Mehrertrag stammt aus wenigen großen Trades: Die fünf besten Trades bringen bei A0 zusammen +4,8 R, bei A1 +7,3 R und bei A3 +9,4 R. Ohne die drei besten Trades ist keine Variante besser als A0
+- Nach Jahren ist A1 nur 2023 klar besser, 2024 bis 2026 gleich oder schlechter. A3 schwankt am stärksten (2025 +0,27 R, 2026 +0,07 R)
+- Der Stop auf den Einstieg ändert an den Verlierern nichts: Volle Verlierer (unter −0,5 R) bleiben bei 7, weil sie den Stop erreichen, bevor das erste Ziel greift
+- A3 hat 10 Trades weniger, weil die länger laufende Restposition neue Spikes blockiert
+- Nautilus legt den Stop auf Einstieg erst nach dem Fill an. Liegt der Kurs am Ende derselben Minute schon unter dem Einstieg, wird der Stop abgelehnt und per Market geschlossen. Das benachteiligt A1 bis A3 leicht
+
+**Entscheidung H30:** abgelehnt, kein OOS-Lauf. Teilziele und Nachziehen verschieben bei H20 Gewinn aus vielen kleinen in wenige große Trades, ohne den Vorteil verlässlich zu erhöhen. A0 bleibt die Regel für den spike-bot. Getestet: 3 Varianten.
