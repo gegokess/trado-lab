@@ -34,6 +34,10 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H24 | Long-Liquidationskaskade nach unten, Long auf den Rücklauf | geplant | offen |
 | H25 | Extremes Premium bzw. Funding kehrt sich über 1 bis 3 Tage um | geplant | offen |
 | H26 | BTC-Trend auf Tagesbasis als zweites Standbein mit wenigen Trades | entfällt | bereits durch H7, H7c und H12 abgedeckt |
+| H27 | H20 mit Entscheidung alle 10 Sekunden statt nach Kerzenschluss | geplant, lokal als H17 begonnen, noch nicht in main | offen |
+| H28 | Trendfilter rückwirkend auf alle vorhandenen Trade-Listen: nur mit dem 4h-Trend handeln | T2 formal erfüllt, T1 nicht | Struktur-Filter hebt R in 76 % der Läufe, Median +0,06 R, macht aber keine Strategie tragfähig |
+| H29 | Zonen-Setups mit dem Trend (Rücklauf in Zone, Ausbruch und Retest), danach Stop- und Ziel-Varianten | abgelehnt in Stufe 1 | 0 von 32 Zellen besser als verschobene Kontrollzonen, bester t-Wert 1,3 |
+| H30 | H20 mit Teilzielen, Stop auf Einstieg nach dem ersten Ziel und nachgezogenem Rest | abgelehnt | höchstens +0,016 R je Trade mehr, aus wenigen großen Trades, in 2024 bis 2026 nicht besser |
 
 ---
 
@@ -1140,3 +1144,129 @@ Grundsatz: Jede Regel beginnt bei einem Marktteilnehmer, der zu einem schlechten
 - H24 Long-Liquidationskaskade: Liquidationsvolumen in höchstens 5 Minuten weit über dem Üblichen bei fallendem Kurs, Long auf den Rücklauf nach dem Muster von H20. Auslöser ist hier der Mechanismus, nicht die Kerzenform. Abgrenzung zu H14: dort Ausbruch nach Open-Interest-Aufbau (abgelehnt), hier Umkehr nach der Kaskade
 - H25 Premium- bzw. Funding-Extrem: Basis über mehrere Stunden extrem, danach 1 bis 3 Tage gegen die Mehrheit. Funding ist seit V1 im Lab (fester Satz), echte Raten gibt es bei Kraken nur ab 2025-10, die Basis ab 2023. Abgrenzung zu H13: dort Funding vereinnahmen (Carry), hier Umkehr nach Extremen
 - H26 Trend auf Tagesbasis: entfällt, in der parallelen Reihe mit H7 (Donchian), H7c (längere Historie) und H12 (Trendfilter) bereits geprüft, jeweils ohne Mehrwert gegenüber Halten
+
+---
+
+## H28: Trendfilter rückwirkend auf alle vorhandenen Trade-Listen
+
+**Idee (Gregor, 13.11.2026):** Viele Setups könnten besser sein, wenn nur in Richtung des übergeordneten Trends gehandelt wird. Ein Filter, der bei den meisten bisherigen Strategien die Trades gegen den Trend aussortiert und damit das Ergebnis hebt, wäre ein allgemeiner Baustein für Trado.
+
+**Regeln** (festgelegt 2026-11-13 vor dem Rechnen, scan/h28_trendfilter.py, keine neuen Backtests)
+
+- Trade-Listen: alle Nautilus-Läufe in runs/ mit mindestens 30 Trades vor OOS_START. Nicht verwendet werden der OOS-Lauf von H20 und die H22-Auswertung (Kopie der H20-Trades). Das H20-Raster zählt je Zelle als eigener Lauf
+- Trend zum Einstieg aus den bis dahin abgeschlossenen 4h-Kerzen des gehandelten Markts
+- T1 4h-EMA wie Trado: aufwärts bei EMA20 > EMA50 und Schluss > EMA50, abwärts spiegelbildlich, sonst gemischt. EMA als exponentieller Durchschnitt über das ganze Archiv (Trado nutzt die letzten 600 Kerzen, der Unterschied ist bei EMA50 vernachlässigbar)
+- T2 4h-Marktstruktur: Swings mit k = 5 (Hoch bzw. Tief über bzw. unter je 5 Kerzen davor und danach, erst 5 Kerzen später bekannt). Aufwärts, wenn die letzten beiden bekannten Swing-Hochs und Swing-Tiefs jeweils steigen, abwärts spiegelbildlich, sonst gemischt
+- Gruppen je Lauf: mit dem Trend (Long bei aufwärts, Short bei abwärts), gegen den Trend, gemischt
+- R netto wie in den Läufen gespeichert, ohne Neuberechnung
+
+**Kriterium:** Ein Trendfilter gilt als allgemein hilfreich, wenn in mindestens zwei Dritteln der Läufe das R mit dem Trend über dem R aller Trades liegt und der Median der Differenz mit dem Trend gegen gegen den Trend mindestens +0,05 R beträgt. Beide Definitionen werden getrennt bewertet. Für einzelne Strategien ist das Ergebnis nur ein Hinweis, eine gefilterte Strategie braucht einen eigenen Test mit OOS.
+
+**Ergebnis** (2026-11-13, runs/20261113-1312_h28_trendfilter, 49 Läufe aus H1 bis H5, H7 und H16 bis H21, In-Sample)
+
+| Trend | Läufe mit Trend besser als alle | Median Differenz mit gegen gegen | Anteil Trades mit / gegen / gemischt | Läufe mit R > 0 vorher / nachher |
+|---|---|---|---|---|
+| T1 4h-EMA | 65 % | +0,04 R | 42 / 43 / 15 % | 19 / 26 von 47 |
+| T2 4h-Struktur | 76 % | +0,06 R | 26 / 30 / 44 % | 20 / 28 von 49 |
+
+- T1 verfehlt das Kriterium knapp (zwei Drittel und +0,05 R), T2 erfüllt es formal
+- Die Läufe sind nicht unabhängig: 18 stammen aus dem H20-Raster, viele weitere sind Varianten derselben Regel. Nach Strategie-Familien zusammengefasst ist der Struktur-Filter nur in 6 von 11 Familien mehrheitlich besser
+- Der Filter verschiebt das Ergebnis im Mittel um wenige Hundertstel R. Keine bisher abgelehnte Strategie wird dadurch klar positiv. Die größten Sprünge (ETH-Wick-Füllung, bis +1,0 R) beruhen auf 17 bis 45 Trades
+- T2 behält nur ein Viertel der Trades. Die Gruppe ohne klare Struktur (gemischt) ist oft schlechter als die Gruppe gegen den Trend. Das spricht eher für „nur bei klarer Struktur handeln“ als für „nur mit dem Trend“. Das ist nicht vorab festgelegt und nur eine Beobachtung
+- H20 (finale Variante): alle +0,13 R (124), mit T2-Trend +0,23 R (31), gegen +0,13 R (50), gemischt +0,07 R (43). Mit T1: mit +0,17 R (54), gegen +0,14 R (48)
+
+**Entscheidung H28:** Ein Trendfilter ist kein Hebel, der schwache Strategien rettet. T2 bleibt als Baustein für H29 und künftige Hypothesen, jeweils vorab festgelegt und mit eigenem OOS-Test. Für H20 ergibt sich kein Grund, die Regel zu ändern.
+
+---
+
+## H29: Zonen-Setups mit dem Trend
+
+**Idee (Gregor, 13.11.2026):** An starken Zonen in Trendrichtung einsteigen: im Aufwärtstrend an einer Unterstützung kaufen, nach einem Ausbruch den Retest des alten Widerstands kaufen, Short spiegelbildlich. Dazu prüfen, ob mehrere Ziele und ein nachgezogener Stop besser sind als ein festes Ziel.
+
+**Vorgehen in Stufen,** jede Stufe dünnt die nächste aus, um bei vielen Varianten Zufallstreffer zu vermeiden.
+
+**Zonen** (nur aus abgeschlossenen Kerzen, ATR = ATR14 der 4h-Kerzen)
+
+- Z1 mehrfach berührt: 4h-Swings mit k = 5 der letzten 100 Tage. Nach Preis sortiert werden Nachbarn mit Abstand höchstens 0,5 ATR zu Gruppen zusammengefasst, Spanne einer Gruppe höchstens 1 ATR, mindestens 3 Swings. Hochs und Tiefs zählen beide (Rollentausch). Zone = Spanne der Gruppe, neu nach jedem 4h-Schluss
+- Z2 Tages- und Wochenextreme: Hoch und Tief des Vortags und der Vorwoche (UTC, Woche ab Montag), Zone = Niveau ± 0,1 ATR
+- Z3 runde Zahlen: Vielfache von 1.000 USD bei BTC und 50 USD bei ETH, Zone = Niveau ± 0,1 %
+- Z4 Volumenknoten: 1m-Volumen der letzten 30 Tage in Preisstufen von 0,25 %, je Minute dem typischen Preis (H + L + C) / 3 zugeordnet. Knoten = Stufe mit Volumen über dem 90-%-Quantil, die zugleich das Maximum ihrer zwei Nachbarn je Seite ist. Zone = Stufe, neu täglich um 00:00 UTC. Nur Kraken-Volumen
+
+**Setups** (Long beschrieben, Short spiegelbildlich bei Abwärtstrend und Widerstand)
+
+- S1 Rücklauf: Trend aufwärts, Zone unter dem Kurs. Auslöser ist die erste Berührung der Oberkante (1m-Tief ≤ Oberkante), nachdem der Kurs seit der letzten Berührung mindestens 1 ATR über der Oberkante lag
+- S2 Ausbruch und Retest: Eine 4h-Kerze schließt über der Oberkante einer Zone, die beim Öffnen dieser Kerze über dem Kurs lag. Auslöser ist die erste Berührung der Oberkante innerhalb der folgenden 12 4h-Kerzen, bei Trend aufwärts im Moment der Berührung
+- Trend T1 oder T2 wie in H28
+- Einstieg als Limit an der Oberkante, Stop bei Unterkante − 0,25 ATR, R = Einstieg − Stop
+- Je Zelle höchstens ein Trade gleichzeitig, Zeitstopp 72 h
+
+**Stufe 1, Scan brutto** (scan/h29_zonen_scan.py, In-Sample BTC bis OOS_START, 32 Zellen: 2 Setups × 4 Zonen × 2 Trenddefinitionen × Long/Short)
+
+- Messgröße: Ergebnis eines 1:1-Brackets (+1R oder −1R, sonst Schlusskurs nach 72 h in R), ohne Gebühren
+- In der Minute der Berührung zählt ein Erreichen des Stops als Verlust, das Ziel erst ab der Folgeminute
+- Kontrolle: je Zone 5 Kontrollzonen gleicher Breite, um zufällig 1 bis 3 ATR nach oben oder unten verschoben (fester Zufallsstartwert), mit denselben Auslöse- und Trendregeln
+- Weiter in Stufe 2 nur Zellen, deren mittleres R über dem der Kontrollzonen liegt mit t ≥ 3 (Welch) und selbst über null
+
+**Stufe 2, Ausstiege in Nautilus** (nur für die Zellen aus Stufe 1, netto mit Gebühren und Funding)
+
+- A1 ein Ziel bei 2R
+- A2 Teilziele 50/30/20 % bei 1R, 2R und 3R, nach dem ersten Teilziel Stop auf den Einstieg
+- A3 50 % bei 1R, danach Stop auf den Einstieg und nach jeder abgeschlossenen 1h-Kerze unter das letzte bekannte 1h-Swing-Tief (k = 2) nachgezogen, nur in Gewinnrichtung
+- Kriterium wie bei H6: netto über null, t ≥ 2,5, ohne die drei besten Trades positiv, in mindestens zwei der drei vollen Jahre 2023 bis 2025 positiv, auf ETH mit denselben Parametern dasselbe Vorzeichen
+
+**Stufe 3:** Die beste Variante aus Stufe 2 genau einmal mit --oos. Danach Papier-Beobachtung, erst dann Trado.
+
+**Ergebnis Stufe 1** (2026-11-13, runs/20261113-1315_h29_zonen_scan_PF_XBTUSD, BTC In-Sample 2023-04 bis 2026-04, brutto, 1:1-Bracket)
+
+| Zone | Trades (alle Zellen) | R Zone | R Kontrolle | Zellen besser als Kontrolle |
+|---|---|---|---|---|
+| Z1 mehrfach berührt | 1.253 | 0,00 | +0,05 | 2 von 8 |
+| Z2 Tages- und Wochenextreme | 1.762 | −0,05 | +0,01 | 2 von 8 |
+| Z3 runde Zahlen | 3.752 | −0,06 | +0,04 | 0 von 8 |
+| Z4 Volumenknoten | 860 | +0,06 | 0,00 | 6 von 8 |
+
+- Keine der 32 Zellen erreicht t ≥ 3 gegenüber den Kontrollzonen, der beste Wert liegt bei 1,3 (S2, Z4, Long, T1, 94 Trades, +0,17 R)
+- Die Trefferquote des 1:1-Brackets liegt fast überall zwischen 44 und 59 %, also beim Münzwurf. Mit dem Trend und an einer Zone einzusteigen verschiebt das nicht messbar
+- Runde Zahlen und Tagesextreme sind sogar etwas schlechter als beliebige Niveaus daneben (t bis −2,6). Das passt dazu, dass solche Niveaus von vielen gesehen und eher durchlaufen werden, ist aber nicht vorab als Hypothese formuliert
+- Volumenknoten sind als einzige Zone im Mittel besser als die Kontrolle (+0,06 R gegen 0,00), aber in keiner Zelle signifikant. Das ist nur Kraken-Volumen
+- Gebühren fehlen noch. Bei R-Abständen von meist 0,5 bis 1,5 ATR (4h) kosten sie etwa 0,02 bis 0,05 R je Trade
+
+**Entscheidung H29:** In Stufe 1 abgelehnt. Die Zonen tragen gegenüber zufälligen Niveaus keine Information, die ein 1:1-Bracket ausnutzen könnte. Stufe 2 (Teilziele, nachgezogener Stop) wird für diese Setups nicht gerechnet, weil ein Ausstieg aus einem Einstieg ohne Vorteil keinen Vorteil macht. Getestet: 32 Zellen, dazu je Zelle 5 Kontrollreihen.
+
+---
+
+## H30: Teilziele und nachgezogener Stop für die H20-Regel
+
+**Idee (Gregor, 13.11.2026):** Mehrere Ziele und ein sinnvoll nachgezogener Stop könnten mehr aus den Trades holen. Geprüft wird das an der einzigen Regel mit belegtem Vorteil (H20), weil ein Ausstieg aus einem Einstieg ohne Vorteil keinen Vorteil macht (siehe H29). Bisher bekannt: Ein festes Ziel bei 100 % war In-Sample +0,21 R (t 3,3), Laufenlassen ab 50 % mit Abstand 0,5 W +0,10 R. Teilziele wurden noch nicht geprüft.
+
+**Regeln** (festgelegt 2026-11-13 vor dem Rechnen, strategies/spike_fill.py erweitert um tps, be_nach_tp1, trail15)
+
+- Einstieg, Stop und alle übrigen Parameter wie die finale H20-Variante (side = upper, sl_ref = start, sl_w = 0,1, Spike 2 % in 5 Minuten)
+- Ziele als Füllgrad des Rücklaufs W vom Rücklauf-Tief aus gemessen (50 % = bisheriges Ziel, 100 % = Spike-Hoch, 150 % = halbes W über dem Spike-Hoch), je als Post-Only-Limit (Maker)
+- A0 Basis: ein Ziel bei 50 % (vorhandener Lauf, 124 Trades, +0,134 R)
+- A1: 50 / 30 / 20 % der Menge bei 50 / 100 / 150 %, nach dem ersten Ziel Stop auf den Einstieg
+- A2: 50 / 50 % bei 50 / 100 %, nach dem ersten Ziel Stop auf den Einstieg
+- A3: 50 % bei 50 %, danach Stop auf den Einstieg und nach jeder abgeschlossenen 15-Minuten-Kerze unter das letzte bekannte 15m-Swing-Tief (k = 2) nachgezogen, nur in Gewinnrichtung, kein weiteres Ziel
+- R bezogen auf das Anfangsrisiko der ganzen Position, netto mit Gebühren und Funding, Nautilus mit adaptiver Reihenfolge
+
+**Kriterium:** Eine Variante ersetzt A0, wenn sie In-Sample je Trade mindestens 0,02 R und in Summe mehr bringt, t ≥ 2,5 erreicht, ohne die drei besten Trades positiv bleibt und in mindestens drei der vier Jahre nicht schlechter ist als A0. Dann genau ein OOS-Lauf. Der OOS-Zeitraum wurde mit A0 schon gesehen, dort zählt deshalb nur, dass die Variante nicht schlechter ist als A0. Getestet werden genau drei Varianten.
+
+**Umsetzung:** Nautilus 2.0.0rc7 setzt offene Reduce-Only-Orders nach jedem Teil-Fill auf die ganze Restposition hoch (OrderUpdated). Das zweite Ziel hätte dann alles geschlossen, A1 und A2 lieferten im ersten Lauf identische Ergebnisse. Die Strategie setzt die Teilziele deshalb nach jedem solchen Update auf ihre geplante Menge zurück (on_order_updated). Die ersten, fehlerhaften Läufe wurden verworfen.
+
+**Ergebnis** (2026-11-13, runs/20261113-*_h30_A0 bis A3, In-Sample 2023-01 bis 2026-04, netto mit Gebühren und Funding)
+
+| Variante | Trades | R netto | t-Wert | ohne Top 3 | R gesamt | 2023 | 2024 | 2025 | 2026 | Haltedauer Mittel |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A0 ein Ziel 50 % | 124 | +0,134 | 4,3 | +0,110 | +16,6 | +0,16 | +0,11 | +0,12 | +0,16 | 1,5 h |
+| A1 50/30/20 bei 50/100/150 %, dann Stop auf Einstieg | 123 | +0,150 | 3,9 | +0,109 | +18,4 | +0,24 | +0,11 | +0,12 | +0,12 | 2,4 h |
+| A2 50/50 bei 50/100 %, dann Stop auf Einstieg | 124 | +0,144 | 3,8 | +0,104 | +17,8 | +0,21 | +0,11 | +0,12 | +0,12 | 1,9 h |
+| A3 50 % bei 50 %, Rest unter 15m-Swing-Tiefs nachgezogen | 114 | +0,141 | 2,9 | +0,085 | +16,1 | +0,18 | +0,08 | +0,27 | +0,07 | 2,6 h |
+
+- Alle drei Varianten liegen knapp über A0, aber unter der Schwelle von +0,02 R je Trade
+- Der Mehrertrag stammt aus wenigen großen Trades: Die fünf besten Trades bringen bei A0 zusammen +4,8 R, bei A1 +7,3 R und bei A3 +9,4 R. Ohne die drei besten Trades ist keine Variante besser als A0
+- Nach Jahren ist A1 nur 2023 klar besser, 2024 bis 2026 gleich oder schlechter. A3 schwankt am stärksten (2025 +0,27 R, 2026 +0,07 R)
+- Der Stop auf den Einstieg ändert an den Verlierern nichts: Volle Verlierer (unter −0,5 R) bleiben bei 7, weil sie den Stop erreichen, bevor das erste Ziel greift
+- A3 hat 10 Trades weniger, weil die länger laufende Restposition neue Spikes blockiert
+- Nautilus legt den Stop auf Einstieg erst nach dem Fill an. Liegt der Kurs am Ende derselben Minute schon unter dem Einstieg, wird der Stop abgelehnt und per Market geschlossen. Das benachteiligt A1 bis A3 leicht
+
+**Entscheidung H30:** abgelehnt, kein OOS-Lauf. Teilziele und Nachziehen verschieben bei H20 Gewinn aus vielen kleinen in wenige große Trades, ohne den Vorteil verlässlich zu erhöhen. A0 bleibt die Regel für den spike-bot. Getestet: 3 Varianten.
