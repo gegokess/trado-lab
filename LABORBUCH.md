@@ -39,6 +39,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H29 | Zonen-Setups mit dem Trend (Rücklauf in Zone, Ausbruch und Retest), danach Stop- und Ziel-Varianten | abgelehnt in Stufe 1 | 0 von 32 Zellen besser als verschobene Kontrollzonen, bester t-Wert 1,3 |
 | H30 | H20 mit Teilzielen, Stop auf Einstieg nach dem ersten Ziel und nachgezogenem Rest | abgelehnt | höchstens +0,016 R je Trade mehr, aus wenigen großen Trades, in 2024 bis 2026 nicht besser |
 | H31 | Lange 4h-Dochte werden in den folgenden 12 Stunden zur Hälfte gefüllt (ETH und BTC, mit und ohne Sweep) | abgelehnt | 0 von 8 Zellen besser als die Kontrolle, netto alle ≤ 0 |
+| H31b | Wie H31, aber mit breiterem Stop (2-facher und 3-facher Zielabstand, Gegenende der Kerze) | abgelehnt | 0 von 24 Zellen besser als die Kontrolle, netto alle < 0 |
 
 ---
 
@@ -1310,3 +1311,34 @@ Grundsatz: Jede Regel beginnt bei einem Marktteilnehmer, der zu einem schlechten
 - Der Fall vom 16.11. liegt im OOS-Zeitraum und ist nicht enthalten
 
 **Entscheidung H31:** abgelehnt. Lange 4h-Dochte werden nicht verlässlicher angelaufen als beliebige Niveaus im gleichen Abstand, sobald man einen Stop mitrechnet. Zusammen mit H1 (1h) ist die Docht-Füllung damit auf zwei Zeitebenen ohne Vorteil. Getestet: 8 Zellen.
+
+---
+
+## H31b: Docht-Füllung auf 4h mit breiterem Stop
+
+**Idee (Gregor, 16.11.2026):** In H31 wird der Stop im gleichen Abstand wie das Ziel oft erreicht, weil die Schwankung nach einer Docht-Kerze hoch ist. Ein breiterer Stop lässt dem Kurs mehr Raum, das Füllziel zu erreichen.
+
+**Regeln** (festgelegt 2026-11-16 vor dem Rechnen, scan/h31_docht_4h.py --stops 1 2 3 kerze)
+
+- Alles wie H31 (Ereignis, Sweep, Füllziel bei der Hälfte des Dochts, Einstieg zum Schluss, Zeitstopp nach 12 Stunden, Kontrollen, 8 Zellen je Stop-Variante)
+- Stop 2: Stop im doppelten Zielabstand, Gewinnschwelle 67 % Treffer
+- Stop 3: Stop im dreifachen Zielabstand, Gewinnschwelle 75 % Treffer
+- Stop Kerze: Stop am anderen Ende der Ereigniskerze ± 0,1 ATR (oberer Docht: Tief − 0,1 ATR, unterer Docht: Hoch + 0,1 ATR)
+- R in Einheiten des Stop-Abstands, Gebühren ebenso. Stop 1 wird zur Kontrolle mitgerechnet und muss H31 treffen
+- Kriterium wie H31 (t ≥ 2,5 gegen die Kontrolle und netto über null). 24 neue Zellen
+
+**Ergebnis** (2026-11-16, runs/20261116-1858_h31b_docht_4h_stops_1_2_3_kerze, In-Sample, Mittel über die 8 Zellen je Variante, gleich gewichtet nach Trades)
+
+| Stop | Gewinnschwelle | Anteil Gewinner | R netto je Trade | Zellen netto > 0 | bester t-Wert gegen Kontrolle |
+|---|---|---|---|---|---|
+| 1-fach (H31) | 50 % | 43 bis 54 % | −0,12 | 0 von 8 | +0,4 |
+| 2-fach | 67 % | 44 bis 61 % | −0,09 | 0 von 8 | −0,3 |
+| 3-fach | 75 % | 47 bis 62 % | −0,07 | 0 von 8 | −0,2 |
+| Gegenende der Kerze | je nach Kerze | 35 bis 53 % | −0,12 | 0 von 8 | +0,5 |
+
+- Stop 1 trifft H31 exakt (gleiche R-Werte je Zelle)
+- Mit breiterem Stop steigt der Anteil der Gewinner, aber langsamer als die Gewinnschwelle. Beim 3-fachen Stop gewinnen höchstens 62 % der Trades, nötig wären 75 %
+- Die Kontrollen gewinnen mit breiterem Stop genauso oft oder öfter als die Docht-Fälle. Ein Docht macht das Füllziel also nicht wahrscheinlicher als ein beliebiges Niveau im gleichen Abstand
+- Viele Trades enden bei breitem Stop am Zeitstopp nach 12 Stunden. Eine längere Haltedauer ändert die Rechnung nicht grundsätzlich, weil die Füllquote ohne Stop schon in H31 nur 42 bis 51 % beträgt
+
+**Entscheidung H31b:** abgelehnt. Ein breiterer Stop verkleinert nur den Verlust je Trade, ein Vorteil gegenüber der Kontrolle entsteht in keiner Variante. Getestet: 24 Zellen, zusammen mit H31 32.

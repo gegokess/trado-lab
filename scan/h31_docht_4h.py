@@ -2,6 +2,8 @@
 
 Aufruf:  python -m scan.h31_docht_4h            In-Sample bis OOS_START
          python -m scan.h31_docht_4h --oos      einmalig ab OOS_START (nur für Treffer-Zellen gedacht)
+         python -m scan.h31_docht_4h --stops 2 3 kerze   H31b: breitere Stops (Vielfaches des Zielabstands
+                                                oder Gegenende der Ereigniskerze ± 0,1 ATR)
 
 Zellen: ETH und BTC × oberer und unterer Docht × alle Ereignisse und nur mit Sweep.
 """
@@ -21,9 +23,12 @@ N_KONTROLLE = 10
 
 
 @njit(cache=True)
-def bracket(high, low, close, i, richtung, einstieg, d, n_min):
-    """1:1-Bracket ab Minute i. Ziel und Stop in derselben Minute zählen als Stop. Rückgabe (R, Ziel getroffen, Ende)."""
-    ziel, stop = einstieg + richtung * d, einstieg - richtung * d
+def bracket(high, low, close, i, richtung, einstieg, d, n_min, ds=0.0):
+    """Bracket ab Minute i, Ziel im Abstand d, Stop im Abstand ds (Standard d). Ziel und Stop in derselben Minute
+    zählen als Stop. R in Einheiten des Stop-Abstands. Rückgabe (R, Ziel getroffen, Ende)."""
+    if ds <= 0.0:
+        ds = d
+    ziel, stop = einstieg + richtung * d, einstieg - richtung * ds
     ende = min(len(high) - 1, i + n_min - 1)
     for j in range(i, ende + 1):
         s = low[j] <= stop if richtung == 1 else high[j] >= stop
@@ -31,11 +36,17 @@ def bracket(high, low, close, i, richtung, einstieg, d, n_min):
         if s:
             return -1.0, 0, j
         if z:
-            return 1.0, 1, j
-    return richtung * (close[ende] - einstieg) / d, 0, ende
+            return d / ds, 1, j
+    return richtung * (close[ende] - einstieg) / ds, 0, ende
 
 
-def auswerten(symbol: str, oos: bool, rng) -> tuple[list, list]:
+def stop_abstand(stop: str, richtung: int, d: float, kerze_l: float, kerze_h: float, e: float, atr: float) -> float:
+    if stop == "kerze":
+        return (e - (kerze_l - 0.1 * atr)) if richtung == 1 else ((kerze_h + 0.1 * atr) - e)
+    return float(stop) * d
+
+
+def auswerten(symbol: str, oos: bool, rng, stop: str = "1") -> tuple[list, list]:
     m1 = pd.read_parquet(RAW_DIR / f"{symbol}_1m.parquet")
     grenze = pd.Timestamp(OOS_START, tz="UTC").value // 1_000_000
     ts = m1.ts_open.to_numpy()
@@ -73,12 +84,15 @@ def auswerten(symbol: str, oos: bool, rng) -> tuple[list, list]:
                 if i <= frei_ab or i >= len(ts):
                     continue
                 e, d = float(c.iloc[k]), float(dist[richtung].iloc[k])
-                r, ziel, ende = bracket(high, low, close, i, richtung, e, d, n_min)
+                ds = stop_abstand(stop, richtung, d, float(l.iloc[k]), float(h.iloc[k]), e, float(h4.atr.iloc[k]))
+                if ds <= 0:
+                    continue
+                r, ziel, ende = bracket(high, low, close, i, richtung, e, d, n_min, ds)
                 frei_ab = ende
-                aus = e + richtung * d if ziel else close[ende] if r not in (-1.0,) else e - richtung * d
-                gebuehr = (FEE_TAKER * e + (FEE_MAKER if ziel else FEE_TAKER) * aus) / d
+                aus = e + richtung * d if ziel else close[ende] if r != -1.0 else e - richtung * ds
+                gebuehr = (FEE_TAKER * e + (FEE_MAKER if ziel else FEE_TAKER) * aus) / ds
                 rs.append((r, r - gebuehr))
-                trades.append(dict(symbol=symbol, seite="oben" if richtung == 1 else "unten", sweep=bool(sweep[richtung].iloc[k]),
+                trades.append(dict(stop=stop, symbol=symbol, seite="oben" if richtung == 1 else "unten", sweep=bool(sweep[richtung].iloc[k]),
                                    nur_sweep=nur_sweep, ts=int(start_ms.iloc[k]), einstieg=e, d=d, d_atr=d / h4.atr.iloc[k],
                                    r_brutto=r, r_netto=r - gebuehr))
                 # Kontrollen: gleicher Abstand in ATR, gleiche Richtung, Schluss ohne Ereignis aus demselben Jahr
@@ -87,37 +101,41 @@ def auswerten(symbol: str, oos: bool, rng) -> tuple[list, list]:
                     ik = int(np.searchsorted(ts, start_ms.iloc[kk]))
                     if ik >= len(ts):
                         continue
-                    dk = d / h4.atr.iloc[k] * h4.atr.iloc[kk]
-                    kr.append(bracket(high, low, close, ik, richtung, float(c.iloc[kk]), float(dk), n_min)[0])
+                    faktor = h4.atr.iloc[kk] / h4.atr.iloc[k]
+                    kr.append(bracket(high, low, close, ik, richtung, float(c.iloc[kk]), float(d * faktor), n_min,
+                                      float(ds * faktor))[0])
             a = np.array(rs) if rs else np.zeros((0, 2))
             kr = np.array(kr)
             t = np.nan
             if len(a) > 1 and len(kr) > 1:
                 t = (a[:, 0].mean() - kr.mean()) / np.sqrt(a[:, 0].var(ddof=1) / len(a) + kr.var(ddof=1) / len(kr))
-            zeilen.append(dict(symbol=symbol, seite="oben" if richtung == 1 else "unten",
+            zeilen.append(dict(stop=stop, symbol=symbol, seite="oben" if richtung == 1 else "unten",
                                auswahl="nur Sweep" if nur_sweep else "alle", n=len(a),
-                               treffer=(a[:, 0] == 1).mean() if len(a) else np.nan,
+                               treffer=(a[:, 0] > 0).mean() if len(a) else np.nan,
                                r_brutto=a[:, 0].mean() if len(a) else np.nan, r_netto=a[:, 1].mean() if len(a) else np.nan,
                                n_kontrolle=len(kr), r_kontrolle=kr.mean() if len(kr) else np.nan,
-                               treffer_kontrolle=(kr == 1).mean() if len(kr) else np.nan, t_diff=t))
+                               treffer_kontrolle=(kr > 0).mean() if len(kr) else np.nan, t_diff=t))
     return zeilen, trades
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--oos", action="store_true")
+    ap.add_argument("--stops", nargs="+", default=["1"], help="1 (H31), 2, 3 oder kerze (H31b)")
     a = ap.parse_args()
-    rng = np.random.default_rng(31)
     zeilen, trades = [], []
-    for sym in ("PF_ETHUSD", "PF_XBTUSD"):
-        z, t = auswerten(sym, a.oos, rng)
-        zeilen += z
-        trades += t
+    for stop in a.stops:
+        rng = np.random.default_rng(31)
+        for sym in ("PF_ETHUSD", "PF_XBTUSD"):
+            z, t = auswerten(sym, a.oos, rng, stop)
+            zeilen += z
+            trades += t
     e = pd.DataFrame(zeilen)
     e["treffer_zelle"] = (e.t_diff >= 2.5) & (e.r_netto > 0)
     pd.set_option("display.width", 220)
     print(e.round(3).to_string(index=False))
-    out = RUNS_DIR / (datetime.now(timezone.utc).strftime("%Y%m%d-%H%M") + "_h31_docht_4h" + ("_OOS" if a.oos else ""))
+    name = "_h31_docht_4h" if a.stops == ["1"] else "_h31b_docht_4h_stops_" + "_".join(a.stops)
+    out = RUNS_DIR / (datetime.now(timezone.utc).strftime("%Y%m%d-%H%M") + name + ("_OOS" if a.oos else ""))
     out.mkdir(exist_ok=True)
     e.to_csv(out / "ergebnis.csv", index=False)
     pd.DataFrame(trades).to_csv(out / "trades.csv", index=False)
