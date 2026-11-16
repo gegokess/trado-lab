@@ -38,6 +38,7 @@ Out-of-Sample ab 2026-05-01 ist gesperrt, bis die Parameter einer Hypothese fina
 | H28 | Trendfilter rückwirkend auf alle vorhandenen Trade-Listen: nur mit dem 4h-Trend handeln | T2 formal erfüllt, T1 nicht | Struktur-Filter hebt R in 76 % der Läufe, Median +0,06 R, macht aber keine Strategie tragfähig |
 | H29 | Zonen-Setups mit dem Trend (Rücklauf in Zone, Ausbruch und Retest), danach Stop- und Ziel-Varianten | abgelehnt in Stufe 1 | 0 von 32 Zellen besser als verschobene Kontrollzonen, bester t-Wert 1,3 |
 | H30 | H20 mit Teilzielen, Stop auf Einstieg nach dem ersten Ziel und nachgezogenem Rest | abgelehnt | höchstens +0,016 R je Trade mehr, aus wenigen großen Trades, in 2024 bis 2026 nicht besser |
+| H31 | Lange 4h-Dochte werden in den folgenden 12 Stunden zur Hälfte gefüllt (ETH und BTC, mit und ohne Sweep) | abgelehnt | 0 von 8 Zellen besser als die Kontrolle, netto alle ≤ 0 |
 
 ---
 
@@ -1270,3 +1271,42 @@ Grundsatz: Jede Regel beginnt bei einem Marktteilnehmer, der zu einem schlechten
 - Nautilus legt den Stop auf Einstieg erst nach dem Fill an. Liegt der Kurs am Ende derselben Minute schon unter dem Einstieg, wird der Stop abgelehnt und per Market geschlossen. Das benachteiligt A1 bis A3 leicht
 
 **Entscheidung H30:** abgelehnt, kein OOS-Lauf. Teilziele und Nachziehen verschieben bei H20 Gewinn aus vielen kleinen in wenige große Trades, ohne den Vorteil verlässlich zu erhöhen. A0 bleibt die Regel für den spike-bot. Getestet: 3 Varianten.
+
+---
+
+## H31: Docht-Füllung auf 4h
+
+**Idee (Gregor, 16.11.2026):** Anlass war die ETH-4h-Kerze vom 16.11. 12:00 UTC: Spike über die gleichen Hochs (EQH) und die Abwärtstrendlinie bis 1.864,6, Schluss bei 1.818,0, oberer Docht 46,6 USD bei höchstem Volumen. Ein so langer Docht wird nach Gregors Erfahrung bald wieder angelaufen. Auf 1h ist das in H1 gescheitert. Auf 4h sind die Wege größer, die Kosten fallen weniger ins Gewicht.
+
+**Regeln** (festgelegt 2026-11-16 vor dem Rechnen, scan/h31_docht_4h.py, In-Sample bis OOS_START)
+
+- 4h-Kerzen ab 00:00 UTC, ATR = Mittel der True Range der letzten 14 4h-Kerzen vor der Ereigniskerze
+- Ereignis oben: oberer Docht U = Hoch − max(Open, Schluss) mindestens 1 ATR und länger als der Körper. Unten spiegelbildlich
+- Mit Sweep: Das Hoch der Ereigniskerze liegt über dem höchsten Hoch der 20 Kerzen davor, der Schluss darunter. Unten spiegelbildlich
+- Füllziel: Hälfte des Dochts, oben also max(Open, Schluss) + 0,5 U. Abstand d = Füllziel − Schluss
+- Handel: Einstieg zum Schluss der Ereigniskerze (Market, Taker), Ziel beim Füllziel (Limit, Maker), Stop im gleichen Abstand d auf der anderen Seite (Stop-Market, Taker), also ein 1:1-Bracket. Zeitstopp nach 3 Kerzen (12 Stunden) zum Kurs. Ausgewertet auf 1m-Kerzen, erreichen Ziel und Stop dieselbe Minute, zählt der Stop
+- Je Zelle höchstens ein Trade gleichzeitig
+- Kontrolle: je Ereignis 10 zufällige 4h-Schlüsse ohne Ereignis aus demselben Kalenderjahr, gleiche Richtung, gleicher Abstand d in ATR-Einheiten und gleiche Regeln (fester Zufallsstartwert)
+- Zellen: ETH und BTC × oben und unten × alle Ereignisse und nur mit Sweep, also 8 Zellen
+
+**Kriterium:** Eine Zelle gilt als Treffer, wenn ihr mittleres R brutto über dem der Kontrolle liegt mit t ≥ 2,5 und netto nach Gebühren über null bleibt. Gebühren in R: (Taker × Einstieg + Maker oder Taker × Ausstieg) / d. Nur Treffer-Zellen werden einmal mit dem OOS-Zeitraum ab 2026-05 gerechnet. Ein Ziel bei 50 % und das 1:1-Bracket sind fest, es wird nicht nach besseren Zielen gesucht.
+
+**Ergebnis** (2026-11-16, runs/20261116-1853_h31_docht_4h, In-Sample 2023-01 bis 2026-04, 1:1-Bracket zum halben Docht)
+
+| Markt | Docht | Auswahl | Trades | Ziel zuerst | R brutto | R netto | R Kontrolle | t-Wert |
+|---|---|---|---|---|---|---|---|---|
+| ETH | oben | alle | 99 | 44 % | +0,05 | −0,00 | +0,01 | 0,4 |
+| ETH | oben | nur Sweep | 43 | 26 % | −0,28 | −0,34 | −0,05 | −1,7 |
+| ETH | unten | alle | 176 | 38 % | −0,11 | −0,16 | +0,02 | −1,8 |
+| ETH | unten | nur Sweep | 62 | 35 % | −0,09 | −0,14 | −0,00 | −0,8 |
+| BTC | oben | alle | 142 | 41 % | +0,01 | −0,05 | +0,02 | −0,1 |
+| BTC | oben | nur Sweep | 67 | 39 % | −0,08 | −0,14 | +0,03 | −0,9 |
+| BTC | unten | alle | 185 | 37 % | −0,07 | −0,13 | −0,05 | −0,2 |
+| BTC | unten | nur Sweep | 66 | 38 % | −0,07 | −0,13 | −0,04 | −0,3 |
+
+- Keine Zelle schlägt die Kontrolle, netto ist keine positiv. Kein OOS-Lauf
+- Zusätzlich, nicht vorab festgelegt und nur zur Einordnung: Ohne Stop wird die Hälfte des Dochts innerhalb von 12 Stunden in 42 bis 51 % der Fälle erreicht, bei den Kontrollen in 37 bis 42 %. Der Unterschied kommt daher, dass nach einer Docht-Kerze die Schwankung höher ist. Der Stop im gleichen Abstand wird dann ebenso öfter erreicht, ein Vorteil entsteht nicht
+- Nach einem Sweep über die Hochs der letzten 20 Kerzen ist die Füllung bei ETH sogar seltener (33 % gegen 41 % bei der Kontrolle). Das passt eher zur Lesart „Ablehnung am Hoch“ als zur Füllung, ist aber mit 43 Fällen nicht belastbar und wurde nicht als Short getestet
+- Der Fall vom 16.11. liegt im OOS-Zeitraum und ist nicht enthalten
+
+**Entscheidung H31:** abgelehnt. Lange 4h-Dochte werden nicht verlässlicher angelaufen als beliebige Niveaus im gleichen Abstand, sobald man einen Stop mitrechnet. Zusammen mit H1 (1h) ist die Docht-Füllung damit auf zwei Zeitebenen ohne Vorteil. Getestet: 8 Zellen.
